@@ -21,6 +21,7 @@ import { parseVideoId, formatTime } from './utils.js';
 // YouTube player state constants.
 const YT_PLAYING = 1;
 const YT_PAUSED = 2;
+const YT_ENDED = 0;
 
 export default function Room({ roomCode, initialState, onLeave }) {
   const [videoId, setVideoId] = useState(initialState?.videoId || null);
@@ -29,6 +30,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [drift, setDrift] = useState(0);
   const [syncStatus, setSyncStatus] = useState('Connecting…');
   const [changeVideoInput, setChangeVideoInput] = useState('');
+  const [queue, setQueue] = useState(initialState?.queue || []);
 
   // Authoritative state mirror (server time based). Kept in a ref because the
   // drift-correction loop reads it frequently without needing re-renders.
@@ -87,6 +89,9 @@ export default function Room({ roomCode, initialState, onLeave }) {
         lastUpdatedServerTime: serverNow(),
       };
       socket.emit('pause', { currentTime: time });
+    } else if (e.data === YT_ENDED) {
+      // Video finished -> ask the server to advance to the next queued video.
+      socket.emit('videoEnded', { videoId: serverStateRef.current.videoId });
     }
   }, []);
 
@@ -175,6 +180,8 @@ export default function Room({ roomCode, initialState, onLeave }) {
       lastUpdatedServerTime: state.lastUpdatedServerTime,
     };
 
+    if (Array.isArray(state.queue)) setQueue(state.queue);
+
     if (!player || !state.videoId) return;
 
     withRemoteApply(() => {
@@ -194,25 +201,24 @@ export default function Room({ roomCode, initialState, onLeave }) {
     socket.on('pause', applyRemotePause);
     socket.on('seek', applyRemoteSeek);
     socket.on('userCount', setUserCount);
-    socket.on('changeVideo', ({ videoId: newId }) => {
+    socket.on('changeVideo', ({ videoId: newId, autoplay }) => {
       serverStateRef.current = {
         videoId: newId,
-        isPlaying: false,
+        isPlaying: !!autoplay,
         currentTime: 0,
         lastUpdatedServerTime: serverNow(),
       };
       setVideoId(newId);
       const player = getPlayer();
       if (player && newId) {
-        withRemoteApply(() => player.loadVideoById(newId, 0), 1200);
-        // A freshly loaded video autoplays; pause it so both start paused/in-sync.
-        window.setTimeout(() => {
-          if (!serverStateRef.current.isPlaying) {
-            withRemoteApply(() => player.pauseVideo());
-          }
-        }, 900);
+        withRemoteApply(() => {
+          // autoplay -> load & play the next video; otherwise cue it (loaded, paused).
+          if (autoplay) player.loadVideoById(newId, 0);
+          else player.cueVideoById(newId, 0);
+        }, 1200);
       }
     });
+    socket.on('queueUpdate', (q) => setQueue(Array.isArray(q) ? q : []));
     socket.on('peerLeft', () => setSyncStatus('Peer left — waiting for someone…'));
 
     return () => {
@@ -222,6 +228,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
       socket.off('seek', applyRemoteSeek);
       socket.off('userCount', setUserCount);
       socket.off('changeVideo');
+      socket.off('queueUpdate');
       socket.off('peerLeft');
     };
   }, [applyRoomState, applyRemotePlay, applyRemotePause, applyRemoteSeek, getPlayer, withRemoteApply]);
@@ -329,6 +336,18 @@ export default function Room({ roomCode, initialState, onLeave }) {
     setChangeVideoInput('');
     socket.emit('changeVideo', { videoId: id });
   }
+  function handleAddToQueue() {
+    const id = parseVideoId(changeVideoInput);
+    if (!id) return;
+    setChangeVideoInput('');
+    socket.emit('addToQueue', { videoId: id });
+  }
+  function handleSkip() {
+    socket.emit('skipVideo');
+  }
+  function handleRemoveFromQueue(id) {
+    socket.emit('removeFromQueue', { id });
+  }
 
   function handleCopy() {
     navigator.clipboard?.writeText(roomCode).then(() => {
@@ -375,17 +394,50 @@ export default function Room({ roomCode, initialState, onLeave }) {
         <button className="btn" onClick={handlePlay} disabled={!isReady || !videoId}>▶ Play</button>
         <button className="btn" onClick={handlePause} disabled={!isReady || !videoId}>⏸ Pause</button>
         <button className="btn" onClick={handleSyncNow} disabled={!videoId}>⟳ Sync Now</button>
+        <button className="btn" onClick={handleSkip} disabled={queue.length === 0} title="Play the next queued video">
+          ⏭ Next ({queue.length})
+        </button>
       </div>
 
       <div className="change-video">
         <input
           type="text"
-          placeholder="Paste a YouTube URL or video ID to change the video"
+          placeholder="Paste a YouTube URL or video ID"
           value={changeVideoInput}
           onChange={(e) => setChangeVideoInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleChangeVideo()}
         />
-        <button className="btn primary" onClick={handleChangeVideo}>Change Video</button>
+        <button className="btn" onClick={handleAddToQueue}>＋ Add to queue</button>
+        <button className="btn primary" onClick={handleChangeVideo}>Play now</button>
+      </div>
+
+      <div className="queue">
+        <div className="queue-header">
+          <span>Up next</span>
+          <span className="queue-count">{queue.length} in queue</span>
+        </div>
+        {queue.length === 0 ? (
+          <div className="queue-empty">
+            Queue is empty. Paste a link above and hit <strong>Add to queue</strong>.
+          </div>
+        ) : (
+          <ul className="queue-list">
+            {queue.map((item, i) => (
+              <li className="queue-item" key={item.id}>
+                <span className="queue-index">{i + 1}</span>
+                <img className="queue-thumb" src={item.thumbnail} alt="" loading="lazy" />
+                <span className="queue-title">{item.title}</span>
+                <button
+                  className="btn tiny ghost"
+                  onClick={() => handleRemoveFromQueue(item.id)}
+                  title="Remove from queue"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="metrics">

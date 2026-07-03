@@ -75,7 +75,43 @@ function roomStatePayload(room) {
     currentTime: computeExpectedTime(room),
     lastUpdatedServerTime: Date.now(),
     userCount: room.users.size,
+    queue: room.queue || [],
   };
+}
+
+// Short unique id for queue items.
+function randomId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+// Fetch a video's title + thumbnail using YouTube's free public oEmbed endpoint
+// (no API key required). Falls back to sensible defaults on any failure.
+async function fetchVideoMeta(videoId) {
+  const thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+    );
+    if (!res.ok) return { title: videoId, thumbnail };
+    const data = await res.json();
+    return { title: data.title || videoId, thumbnail: data.thumbnail_url || thumbnail };
+  } catch {
+    return { title: videoId, thumbnail };
+  }
+}
+
+// Advance to the next queued video (if any) and broadcast the change. The next
+// video autoplays so the session flows continuously.
+function advanceQueue(room, code) {
+  const next = (room.queue || []).shift();
+  if (!next) return false;
+  room.videoId = next.videoId;
+  room.isPlaying = true;
+  room.currentTime = 0;
+  room.lastUpdatedServerTime = Date.now();
+  io.to(code).emit('changeVideo', { videoId: next.videoId, autoplay: true, serverTime: Date.now() });
+  io.to(code).emit('queueUpdate', room.queue);
+  return true;
 }
 
 io.on('connection', (socket) => {
@@ -105,6 +141,7 @@ io.on('connection', (socket) => {
       currentTime: 0,
       lastUpdatedServerTime: Date.now(),
       users: new Set(),
+      queue: [], // Shared upcoming-videos playlist.
     };
 
     joinRoomInternal(socket, roomCode, ack);
@@ -216,8 +253,10 @@ io.on('connection', (socket) => {
     room.lastUpdatedServerTime = Date.now();
 
     // Broadcast to everyone in the room (including sender) so all reset cleanly.
+    // autoplay:false -> the video is cued (loaded, paused) so both start in sync.
     io.to(room.__code).emit('changeVideo', {
       videoId,
+      autoplay: false,
       serverTime: Date.now(),
     });
   });
@@ -227,6 +266,59 @@ io.on('connection', (socket) => {
     const room = getSocketRoom(socket);
     if (!room) return;
     socket.emit('roomState', roomStatePayload(room));
+  });
+
+  // ---------------------------------------------------------------------------
+  // Video queue / playlist events.
+  // ---------------------------------------------------------------------------
+
+  // Add a video to the shared queue. If nothing is currently loaded, the video
+  // becomes the current (cued) video instead of being queued.
+  socket.on('addToQueue', async ({ videoId } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room || !videoId) return;
+
+    if (!room.videoId) {
+      room.videoId = videoId;
+      room.isPlaying = false;
+      room.currentTime = 0;
+      room.lastUpdatedServerTime = Date.now();
+      io.to(room.__code).emit('changeVideo', { videoId, autoplay: false, serverTime: Date.now() });
+      return;
+    }
+
+    const meta = await fetchVideoMeta(videoId);
+    // Re-resolve the room in case things changed during the await.
+    const code = socket.data.roomCode;
+    const liveRoom = rooms[code];
+    if (!liveRoom) return;
+    liveRoom.queue.push({ id: randomId(), videoId, title: meta.title, thumbnail: meta.thumbnail });
+    io.to(code).emit('queueUpdate', liveRoom.queue);
+  });
+
+  // Remove a specific item from the queue.
+  socket.on('removeFromQueue', ({ id } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    room.queue = (room.queue || []).filter((item) => item.id !== id);
+    io.to(room.__code).emit('queueUpdate', room.queue);
+  });
+
+  // Skip to the next video in the queue immediately ("Next" button).
+  socket.on('skipVideo', () => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    advanceQueue(room, room.__code);
+  });
+
+  // A client reports the current video finished; advance to the next queued one.
+  // Guarded by videoId so both clients ending simultaneously only advance once.
+  socket.on('videoEnded', ({ videoId } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    if (room.videoId && room.videoId === videoId) {
+      advanceQueue(room, room.__code);
+    }
   });
 
   // ---------------------------------------------------------------------------
