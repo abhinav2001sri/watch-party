@@ -1,0 +1,12 @@
+# Render.com blueprint — one-click deploy for the YouTube Watch Party.
+# In Render: New + -> Blueprint -> pick your repo. Render reads this file.
+services:
+  - type: web
+    name: youtube-watch-party
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
