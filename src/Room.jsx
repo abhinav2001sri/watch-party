@@ -27,10 +27,17 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [videoId, setVideoId] = useState(initialState?.videoId || null);
   const [userCount, setUserCount] = useState(initialState?.userCount || 1);
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
   const [drift, setDrift] = useState(0);
   const [syncStatus, setSyncStatus] = useState('Connecting…');
   const [changeVideoInput, setChangeVideoInput] = useState('');
   const [queue, setQueue] = useState(initialState?.queue || []);
+  const [activity, setActivity] = useState('');
+  const [floaters, setFloaters] = useState([]); // { id, emoji, left }
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchState, setSearchState] = useState('idle'); // idle | loading | done | no-key | error
+  const [showSearch, setShowSearch] = useState(false);
 
   // Authoritative state mirror (server time based). Kept in a ref because the
   // drift-correction loop reads it frequently without needing re-renders.
@@ -194,6 +201,16 @@ export default function Room({ roomCode, initialState, onLeave }) {
     }, 1000);
   }, [getPlayer, withRemoteApply]);
 
+  // Spawn a floating emoji that drifts up and fades out.
+  const spawnFloater = useCallback((emoji) => {
+    const id = Math.random().toString(36).slice(2);
+    const left = 10 + Math.random() * 80; // percent across the player
+    setFloaters((f) => [...f, { id, emoji, left }]);
+    window.setTimeout(() => {
+      setFloaters((f) => f.filter((x) => x.id !== id));
+    }, 2200);
+  }, []);
+
   // ---- Socket wiring ---------------------------------------------------------
   useEffect(() => {
     socket.on('roomState', applyRoomState);
@@ -219,6 +236,8 @@ export default function Room({ roomCode, initialState, onLeave }) {
       }
     });
     socket.on('queueUpdate', (q) => setQueue(Array.isArray(q) ? q : []));
+    socket.on('reaction', ({ emoji }) => spawnFloater(emoji));
+    socket.on('system', (msg) => setActivity(typeof msg === 'string' ? msg : ''));
     socket.on('peerLeft', () => setSyncStatus('Peer left — waiting for someone…'));
 
     return () => {
@@ -229,9 +248,18 @@ export default function Room({ roomCode, initialState, onLeave }) {
       socket.off('userCount', setUserCount);
       socket.off('changeVideo');
       socket.off('queueUpdate');
+      socket.off('reaction');
+      socket.off('system');
       socket.off('peerLeft');
     };
-  }, [applyRoomState, applyRemotePlay, applyRemotePause, applyRemoteSeek, getPlayer, withRemoteApply]);
+  }, [applyRoomState, applyRemotePlay, applyRemotePause, applyRemoteSeek, getPlayer, withRemoteApply, spawnFloater]);
+
+  // Auto-clear the activity line after a few seconds.
+  useEffect(() => {
+    if (!activity) return;
+    const t = window.setTimeout(() => setActivity(''), 4000);
+    return () => window.clearTimeout(t);
+  }, [activity]);
 
   // ---- Local seek detection + drift correction loop --------------------------
   useEffect(() => {
@@ -349,11 +377,69 @@ export default function Room({ roomCode, initialState, onLeave }) {
     socket.emit('removeFromQueue', { id });
   }
 
+  // Send an emoji reaction: show it locally right away and tell the peer.
+  function handleReact(emoji) {
+    spawnFloater(emoji);
+    socket.emit('reaction', { emoji });
+  }
+
+  // On-site YouTube search (proxied through the backend so the key stays secret).
+  async function handleSearch() {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSearchState('loading');
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (data.ok) {
+        setSearchResults(data.items || []);
+        setSearchState('done');
+      } else if (data.reason === 'no-key') {
+        setSearchState('no-key');
+        setSearchResults([]);
+      } else {
+        setSearchState('error');
+        setSearchResults([]);
+      }
+    } catch {
+      setSearchState('error');
+      setSearchResults([]);
+    }
+  }
+  function handlePlayResult(videoId) {
+    socket.emit('changeVideo', { videoId });
+    setShowSearch(false);
+    setSearchResults([]);
+    setSearchQuery('');
+  }
+  function handleQueueResult(videoId) {
+    socket.emit('addToQueue', { videoId });
+  }
+
   function handleCopy() {
     navigator.clipboard?.writeText(roomCode).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     });
+  }
+
+  // Mobile-friendly share: use the native share sheet when available (opens
+  // WhatsApp/Messages/etc.), otherwise fall back to copying the join link.
+  function handleShare() {
+    const joinUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+    const shareData = {
+      title: 'Watch Party',
+      text: `Join my watch party! Room ${roomCode}`,
+      url: joinUrl,
+    };
+    if (navigator.share) {
+      navigator.share(shareData).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(joinUrl).then(() => {
+        setShared(true);
+        window.setTimeout(() => setShared(false), 1500);
+      });
+    }
   }
 
   function handleLeaveClick() {
@@ -368,7 +454,10 @@ export default function Room({ roomCode, initialState, onLeave }) {
           <span className="label">Room</span>
           <span className="code">{roomCode}</span>
           <button className="btn tiny" onClick={handleCopy}>
-            {copied ? '✓ Copied' : 'Copy'}
+            {copied ? '✓' : 'Copy'}
+          </button>
+          <button className="btn tiny primary" onClick={handleShare}>
+            {shared ? '✓ Link copied' : '🔗 Share'}
           </button>
         </div>
         <div className="room-status">
@@ -383,11 +472,32 @@ export default function Room({ roomCode, initialState, onLeave }) {
       <div className="player-wrap">
         {!videoId && (
           <div className="no-video">
-            No video loaded yet. Use <strong>Change Video</strong> below to start.
+            No video loaded yet. Use <strong>Search</strong> or <strong>Play now</strong> below to start.
           </div>
         )}
         {/* The IFrame API replaces this div with the player iframe. */}
         <div id="yt-player" />
+
+        {/* Floating emoji reactions overlay. */}
+        <div className="floaters">
+          {floaters.map((f) => (
+            <span key={f.id} className="floater" style={{ left: `${f.left}%` }}>
+              {f.emoji}
+            </span>
+          ))}
+        </div>
+
+        {/* Activity line (who did what). */}
+        {activity && <div className="activity-toast">{activity}</div>}
+      </div>
+
+      {/* Emoji reaction bar. */}
+      <div className="reaction-bar">
+        {['❤️', '😂', '😮', '👍', '🔥', '🎉', '😢', '👀'].map((e) => (
+          <button key={e} className="reaction-btn" onClick={() => handleReact(e)}>
+            {e}
+          </button>
+        ))}
       </div>
 
       <div className="controls">
@@ -397,7 +507,56 @@ export default function Room({ roomCode, initialState, onLeave }) {
         <button className="btn" onClick={handleSkip} disabled={queue.length === 0} title="Play the next queued video">
           ⏭ Next ({queue.length})
         </button>
+        <button className="btn" onClick={() => setShowSearch((s) => !s)}>
+          🔍 {showSearch ? 'Close search' : 'Search YouTube'}
+        </button>
       </div>
+
+      {showSearch && (
+        <div className="search-panel">
+          <div className="search-row">
+            <input
+              type="text"
+              placeholder="Search YouTube…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            />
+            <button className="btn primary" onClick={handleSearch}>Search</button>
+          </div>
+
+          {searchState === 'loading' && <div className="search-note">Searching…</div>}
+          {searchState === 'no-key' && (
+            <div className="search-note">
+              Search needs a free YouTube API key. Add <code>YOUTUBE_API_KEY</code> in your
+              server environment (Render → Environment) to enable it. You can still paste
+              links below meanwhile.
+            </div>
+          )}
+          {searchState === 'error' && <div className="search-note">Search failed. Try again.</div>}
+          {searchState === 'done' && searchResults.length === 0 && (
+            <div className="search-note">No results.</div>
+          )}
+
+          {searchResults.length > 0 && (
+            <ul className="search-results">
+              {searchResults.map((r) => (
+                <li className="search-item" key={r.videoId}>
+                  <img className="search-thumb" src={r.thumbnail} alt="" loading="lazy" />
+                  <div className="search-meta">
+                    <span className="search-title">{r.title}</span>
+                    <span className="search-channel">{r.channel}</span>
+                  </div>
+                  <div className="search-actions">
+                    <button className="btn tiny primary" onClick={() => handlePlayResult(r.videoId)}>Play</button>
+                    <button className="btn tiny" onClick={() => handleQueueResult(r.videoId)}>＋ Queue</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="change-video">
         <input

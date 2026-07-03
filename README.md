@@ -115,8 +115,36 @@ Then open **http://localhost:3001**.
 ## Socket events
 
 `createRoom`, `joinRoom`, `leaveRoom`, `roomState`, `play`, `pause`, `seek`,
-`changeVideo`, `requestRoomState`, `syncRequest`/`syncResponse`, `userCount`,
-`peerLeft`, `roomFull`, `errorMessage`.
+`changeVideo`, `addToQueue`, `removeFromQueue`, `skipVideo`, `videoEnded`,
+`queueUpdate`, `reaction`, `system`, `requestRoomState`,
+`syncRequest`/`syncResponse`, `userCount`, `peerLeft`, `roomFull`, `errorMessage`.
+
+## Features
+
+- 🎬 **Synced playback** — play / pause / seek / video change, server-authoritative
+  with drift correction.
+- 📋 **Shared queue / playlist** — add, remove, auto-advance on end, skip button,
+  titles + thumbnails (via YouTube oEmbed, no key).
+- 🙋 **Display names** — pick a name; see "Alex paused / added a video".
+- 😀 **Emoji reactions** — floating emoji both people see in real time.
+- 🔍 **On-site YouTube search** — search and pick videos without leaving the app
+  (requires a free API key, see below).
+- 🔗 **One-click join links & native share** — share `?room=CODE` links; on phones
+  the Share button opens the native share sheet.
+- 📱 **Mobile-friendly** — sticky video, touch-sized controls, safe-area padding.
+- 🌈 **Cute animated pastel background.**
+
+## Enabling YouTube search (optional, free)
+
+Search is proxied through the backend so your API key stays server-side and is
+never shipped to the browser. Without a key, everything else works and the
+search box shows a friendly hint.
+
+1. Create a key: Google Cloud Console → enable **YouTube Data API v3** → create an
+   API key. (Free tier: 10,000 units/day; a search costs ~100 units.)
+2. Provide it to the server as the `YOUTUBE_API_KEY` environment variable:
+   - **Local:** `setx YOUTUBE_API_KEY "your-key"` (new terminal), or set it inline.
+   - **Render:** service → **Environment** → add `YOUTUBE_API_KEY` → save (redeploys).
 
 ## Limitations
 

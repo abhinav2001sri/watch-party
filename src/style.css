@@ -26,11 +26,42 @@ html, body, #root {
 }
 
 body {
-  background: radial-gradient(1200px 600px at 50% -10%, #1c2140 0%, var(--bg) 55%);
+  background: linear-gradient(135deg, #ffd1e8 0%, #d7c4ff 25%, #c4e0ff 50%, #c4fff0 75%, #fff3c4 100%);
+  background-size: 400% 400%;
+  animation: cuteGradient 24s ease infinite;
   color: var(--text);
   font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Slow, dreamy pastel gradient drift. */
+@keyframes cuteGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Floating cute shapes behind everything. */
+.app::before {
+  content: '🎬  🍿  💕  ✨  🎧  🌈  ⭐  🎵';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  font-size: 28px;
+  letter-spacing: 60px;
+  line-height: 120px;
+  white-space: pre-wrap;
+  opacity: 0.16;
+  animation: floatUp 40s linear infinite;
+}
+@keyframes floatUp {
+  0% { transform: translateY(10%); }
+  100% { transform: translateY(-30%); }
+}
+
+/* A soft translucent surface so content stays readable over the cute bg. */
+.app > * { position: relative; z-index: 1; }
 
 .app {
   min-height: 100%;
@@ -69,7 +100,7 @@ input[type='text'] {
   border: 1px solid var(--border);
   background: #12162a;
   color: var(--text);
-  font-size: 15px;
+  font-size: 16px; /* 16px avoids iOS auto-zoom on focus */
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -277,6 +308,102 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   -webkit-box-orient: vertical;
 }
 
+/* ---------- Name field (home) ---------- */
+.name-field {
+  max-width: 420px;
+  margin: 0 auto 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+
+/* ---------- Emoji reactions ---------- */
+.reaction-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  margin-bottom: 16px;
+}
+.reaction-btn {
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.reaction-btn:hover { background: #232a4a; transform: scale(1.15); }
+.reaction-btn:active { transform: scale(0.95); }
+
+/* Floating emoji overlay on the player. */
+.floaters { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.floater {
+  position: absolute;
+  bottom: 8%;
+  font-size: 40px;
+  animation: floatEmoji 2.2s ease-out forwards;
+}
+@keyframes floatEmoji {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  15% { opacity: 1; transform: translateY(-10px) scale(1.1); }
+  100% { transform: translateY(-220px) scale(1); opacity: 0; }
+}
+
+/* Activity toast (who paused/played/added). */
+.activity-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  z-index: 6;
+  white-space: nowrap;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- YouTube search panel ---------- */
+.search-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.search-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.search-row input { flex: 1; }
+.search-note { color: var(--muted); font-size: 14px; padding: 6px 0; }
+.search-note code { background: #12162a; padding: 2px 6px; border-radius: 6px; color: #ffd; }
+.search-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #12162a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.search-thumb { width: 90px; height: 50px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #000; }
+.search-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.search-title { font-size: 14px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.search-channel { font-size: 12px; color: var(--muted); }
+.search-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {
   .cards { grid-template-columns: 1fr; }
@@ -284,4 +411,52 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   .hero h1 { font-size: 34px; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .change-video { flex-direction: column; }
+}
+
+/* ---------- Mobile / touch tuning ---------- */
+@media (max-width: 640px) {
+  .app { padding: 12px 10px calc(24px + env(safe-area-inset-bottom)); }
+
+  /* Bigger, thumb-friendly buttons. */
+  .btn { min-height: 44px; padding: 11px 16px; }
+  .btn.tiny { min-height: 36px; }
+
+  /* Room header stacks cleanly; share/copy sit on their own row. */
+  .room-header { gap: 8px; padding: 12px; }
+  .room-code { flex-wrap: wrap; width: 100%; }
+  .room-code .code { font-size: 20px; letter-spacing: 2px; }
+  .room-status { order: 3; font-size: 14px; }
+
+  /* Keep the video pinned to the top while the queue scrolls beneath it. */
+  .player-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin: 0 -10px 12px; /* edge-to-edge video on phones */
+    width: calc(100% + 20px);
+    border-radius: 0;
+  }
+
+  /* Controls become a 2-column grid of full-width buttons. */
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .controls .btn { width: 100%; }
+
+  /* Queue rows: smaller thumbs, tighter spacing. */
+  .queue { padding: 12px; }
+  .queue-thumb { width: 56px; height: 32px; }
+  .queue-title { font-size: 13px; }
+
+  .metrics { gap: 8px; }
+  .metric { padding: 10px; }
+  .metric-value { font-size: 17px; }
+
+  /* Search results stack the action buttons horizontally on small screens. */
+  .search-actions { flex-direction: row; }
+  .search-thumb { width: 72px; height: 40px; }
+  .reaction-btn { font-size: 22px; padding: 6px; }
+  .search-row { flex-direction: column; }
 }

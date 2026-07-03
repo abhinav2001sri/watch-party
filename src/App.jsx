@@ -27,6 +27,24 @@ export default function App() {
     };
   }, []);
 
+  // Auto-join a room if the URL contains ?room=CODE (one-click join links).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = (params.get('room') || '').toUpperCase().trim();
+    if (!code) return;
+
+    const tryJoin = () => {
+      socket.emit('joinRoom', { roomCode: code }, (res) => {
+        if (res && res.ok) enterRoom(res.roomCode, res.state);
+        else setBanner((res && res.error) || 'Could not join that room.');
+      });
+    };
+
+    if (socket.connected) tryJoin();
+    else socket.once('connect', tryJoin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-dismiss the banner after a few seconds.
   useEffect(() => {
     if (!banner) return;
@@ -37,10 +55,14 @@ export default function App() {
   function enterRoom(code, state) {
     setBanner('');
     setRoom({ code, state });
+    // Reflect the room in the URL so it's shareable and the back button works.
+    const url = `${window.location.pathname}?room=${code}`;
+    window.history.replaceState({}, '', url);
   }
 
   function leaveRoom() {
     setRoom(null);
+    window.history.replaceState({}, '', window.location.pathname);
   }
 
   return (

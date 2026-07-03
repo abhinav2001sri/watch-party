@@ -29,6 +29,45 @@ app.use(cors());
 // Serve the production build if it exists (npm run build -> dist/).
 app.use(express.static('dist'));
 
+// ---------------------------------------------------------------------------
+// On-site YouTube search. Proxied through the backend so the API key stays
+// server-side (never shipped to the browser). Set YOUTUBE_API_KEY in the host's
+// environment (e.g. Render -> Environment). Without a key this returns a clear
+// message instead of failing silently.
+// ---------------------------------------------------------------------------
+app.get('/api/search', async (req, res) => {
+  const q = (req.query.q || '').toString().trim();
+  const key = process.env.YOUTUBE_API_KEY;
+
+  if (!key) {
+    return res.status(200).json({ ok: false, reason: 'no-key', items: [] });
+  }
+  if (!q) {
+    return res.status(200).json({ ok: true, items: [] });
+  }
+
+  try {
+    const url =
+      'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12' +
+      `&q=${encodeURIComponent(q)}&key=${key}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      const body = await r.text();
+      return res.status(200).json({ ok: false, reason: 'api-error', detail: body, items: [] });
+    }
+    const data = await r.json();
+    const items = (data.items || []).map((it) => ({
+      videoId: it.id.videoId,
+      title: it.snippet.title,
+      channel: it.snippet.channelTitle,
+      thumbnail: it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url,
+    }));
+    return res.json({ ok: true, items });
+  } catch (e) {
+    return res.status(200).json({ ok: false, reason: 'exception', detail: String(e), items: [] });
+  }
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
@@ -117,6 +156,12 @@ function advanceQueue(room, code) {
 io.on('connection', (socket) => {
   // Each socket may belong to at most one room; we track it for cleanup.
   socket.data.roomCode = null;
+  socket.data.name = 'Guest';
+
+  // Sanitize + cap a display name.
+  function cleanName(n) {
+    return (n || '').toString().trim().slice(0, 20) || 'Guest';
+  }
 
   // ---------------------------------------------------------------------------
   // Clock sync: client sends its local timestamp, server replies with both the
@@ -133,7 +178,8 @@ io.on('connection', (socket) => {
   // ---------------------------------------------------------------------------
   // createRoom -> creates a fresh room and joins the creator to it.
   // ---------------------------------------------------------------------------
-  socket.on('createRoom', ({ videoId } = {}, ack) => {
+  socket.on('createRoom', ({ videoId, name } = {}, ack) => {
+    socket.data.name = cleanName(name);
     const roomCode = generateRoomCode();
     rooms[roomCode] = {
       videoId: videoId || null,
@@ -150,7 +196,8 @@ io.on('connection', (socket) => {
   // ---------------------------------------------------------------------------
   // joinRoom -> joins an existing room (enforces the 2-user maximum).
   // ---------------------------------------------------------------------------
-  socket.on('joinRoom', ({ roomCode } = {}, ack) => {
+  socket.on('joinRoom', ({ roomCode, name } = {}, ack) => {
+    socket.data.name = cleanName(name);
     roomCode = (roomCode || '').toUpperCase().trim();
     const room = rooms[roomCode];
 
@@ -185,10 +232,22 @@ io.on('connection', (socket) => {
     // Notify everyone (including the joiner) of the updated user count.
     io.to(roomCode).emit('userCount', room.users.size);
 
+    // Let the peer know who joined (for the activity line).
+    socket.to(roomCode).emit('system', `${socket.data.name} joined`);
+
     if (typeof ack === 'function') {
       ack({ ok: true, roomCode, state: payload });
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Emoji reactions: broadcast a floating emoji to the peer in the room.
+  // ---------------------------------------------------------------------------
+  socket.on('reaction', ({ emoji } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room || !emoji) return;
+    socket.to(room.__code).emit('reaction', { emoji: String(emoji).slice(0, 8), name: socket.data.name });
+  });
 
   // ---------------------------------------------------------------------------
   // Playback events. The server updates its authoritative state, stamps it with
@@ -213,6 +272,7 @@ io.on('connection', (socket) => {
       startAtServerTime,
       serverTime: Date.now(),
     });
+    socket.to(room.__code).emit('system', `${socket.data.name} pressed play`);
   });
 
   socket.on('pause', ({ currentTime } = {}) => {
@@ -227,6 +287,7 @@ io.on('connection', (socket) => {
       currentTime: room.currentTime,
       serverTime: Date.now(),
     });
+    socket.to(room.__code).emit('system', `${socket.data.name} paused`);
   });
 
   socket.on('seek', ({ currentTime } = {}) => {
@@ -259,6 +320,7 @@ io.on('connection', (socket) => {
       autoplay: false,
       serverTime: Date.now(),
     });
+    socket.to(room.__code).emit('system', `${socket.data.name} changed the video`);
   });
 
   // A client explicitly requesting the latest authoritative state ("Sync Now").
@@ -294,6 +356,7 @@ io.on('connection', (socket) => {
     if (!liveRoom) return;
     liveRoom.queue.push({ id: randomId(), videoId, title: meta.title, thumbnail: meta.thumbnail });
     io.to(code).emit('queueUpdate', liveRoom.queue);
+    socket.to(code).emit('system', `${socket.data.name} added "${meta.title}" to the queue`);
   });
 
   // Remove a specific item from the queue.

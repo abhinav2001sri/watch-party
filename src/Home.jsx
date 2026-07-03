@@ -10,7 +10,14 @@ import { parseVideoId } from './utils.js';
 export default function Home({ onEnterRoom }) {
   const [videoInput, setVideoInput] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  const [name, setName] = useState(() => localStorage.getItem('wp_name') || '');
   const [error, setError] = useState('');
+
+  // Persist the chosen display name for next time.
+  function rememberName(n) {
+    setName(n);
+    localStorage.setItem('wp_name', n);
+  }
 
   function handleCreate() {
     setError('');
@@ -21,7 +28,7 @@ export default function Home({ onEnterRoom }) {
       return;
     }
 
-    socket.emit('createRoom', { videoId }, (res) => {
+    socket.emit('createRoom', { videoId, name: name.trim() || 'Guest' }, (res) => {
       if (res && res.ok) {
         onEnterRoom(res.roomCode, res.state);
       } else {
@@ -38,7 +45,7 @@ export default function Home({ onEnterRoom }) {
       return;
     }
 
-    socket.emit('joinRoom', { roomCode: code }, (res) => {
+    socket.emit('joinRoom', { roomCode: code, name: name.trim() || 'Guest' }, (res) => {
       if (res && res.ok) {
         onEnterRoom(res.roomCode, res.state);
       } else {
@@ -54,6 +61,18 @@ export default function Home({ onEnterRoom }) {
         <p className="subtitle">
           Watch YouTube together, perfectly in sync. Two people, one room.
         </p>
+      </div>
+
+      <div className="name-field">
+        <label htmlFor="name">Your name</label>
+        <input
+          id="name"
+          type="text"
+          placeholder="What should we call you?"
+          value={name}
+          maxLength={20}
+          onChange={(e) => rememberName(e.target.value)}
+        />
       </div>
 
       <div className="cards">
