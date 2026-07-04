@@ -55,7 +55,7 @@ body {
   position: absolute;
   bottom: -60px;
   opacity: 0;
-  filter: drop-shadow(0 2px 6px rgba(120, 40, 180, 0.25));
+  filter: drop-shadow(0 2px 8px rgba(90, 30, 150, 0.35));
   animation-name: bgFloatUp;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
@@ -63,14 +63,15 @@ body {
 }
 @keyframes bgFloatUp {
   0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
-  10% { opacity: 0.5; }
-  50% { transform: translateY(-55vh) translateX(var(--drift)) rotate(180deg); opacity: 0.55; }
-  90% { opacity: 0.4; }
+  10% { opacity: 0.9; }
+  50% { transform: translateY(-55vh) translateX(var(--drift)) rotate(180deg); opacity: 0.85; }
+  90% { opacity: 0.7; }
   100% { transform: translateY(-108vh) translateX(0) rotate(360deg); opacity: 0; }
 }
 
 /* A soft translucent surface so content stays readable over the cute bg. */
 .app > * { position: relative; z-index: 1; }
+.app > .bg-floaters { z-index: 0; }
 
 .app {
   min-height: 100%;
