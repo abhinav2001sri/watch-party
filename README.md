@@ -116,7 +116,9 @@ Then open **http://localhost:3001**.
 
 `createRoom`, `joinRoom`, `leaveRoom`, `roomState`, `play`, `pause`, `seek`,
 `changeVideo`, `addToQueue`, `removeFromQueue`, `skipVideo`, `videoEnded`,
-`queueUpdate`, `reaction`, `system`, `requestRoomState`,
+`queueUpdate`, `reaction`, `chat`, `system`, `requestRoomState`,
+`voice-join`, `voice-leave`, `voice-initiate`, `voice-offer`, `voice-answer`,
+`voice-ice`, `voice-peer-left`,
 `syncRequest`/`syncResponse`, `userCount`, `peerLeft`, `roomFull`, `errorMessage`.
 
 ## Features
@@ -127,12 +129,16 @@ Then open **http://localhost:3001**.
   titles + thumbnails (via YouTube oEmbed, no key).
 - 🙋 **Display names** — pick a name; see "Alex paused / added a video".
 - 😀 **Emoji reactions** — floating emoji both people see in real time.
+- 💬 **Text chat** — private 1:1 chat panel with unread badge, right in the room.
+- 🎤 **Live voice / karaoke** — talk or sing together over peer-to-peer WebRTC audio
+  (with mute toggle). Signaling runs through Socket.IO; audio flows directly
+  between the two browsers.
 - 🔍 **On-site YouTube search** — search and pick videos without leaving the app
   (requires a free API key, see below).
 - 🔗 **One-click join links & native share** — share `?room=CODE` links; on phones
   the Share button opens the native share sheet.
 - 📱 **Mobile-friendly** — sticky video, touch-sized controls, safe-area padding.
-- 🌈 **Cute animated pastel background.**
+- 🌈 **Bright, cute animated pastel background & vibrant theme.**
 
 ## Enabling YouTube search (optional, free)
 
@@ -153,3 +159,9 @@ latency and browser/player buffering. However, the server-authoritative timing
 model plus continuous drift correction keeps both devices **closely
 synchronized** (typically well under a second apart). Autoplay policies may
 require a user interaction (a click) before playback starts in some browsers.
+
+**Voice chat across different networks:** live voice uses peer-to-peer WebRTC with
+free public **STUN** servers, which works for most home networks. Some strict or
+symmetric NATs (common on mobile carriers or corporate Wi-Fi) may block the direct
+connection — a **TURN** relay server would be needed for those cases, and one is
+**not included** here. Text chat and video sync always work regardless of network.

@@ -16,6 +16,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { socket, serverNow, getClockOffset } from './socket.js';
 import { useYouTubePlayer } from './useYouTubePlayer.js';
+import { useVoiceChat } from './useVoiceChat.js';
 import { parseVideoId, formatTime } from './utils.js';
 
 // YouTube player state constants.
@@ -38,6 +39,14 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searchState, setSearchState] = useState('idle'); // idle | loading | done | no-key | error
   const [showSearch, setShowSearch] = useState(false);
+  const [messages, setMessages] = useState([]); // { id, mine, name, text, time }
+  const [chatInput, setChatInput] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const chatEndRef = useRef(null);
+
+  // Live voice chat (WebRTC) hook.
+  const { inVoice, muted, voiceStatus, startVoice, stopVoice, toggleMute } = useVoiceChat();
 
   // Authoritative state mirror (server time based). Kept in a ref because the
   // drift-correction loop reads it frequently without needing re-renders.
@@ -238,6 +247,10 @@ export default function Room({ roomCode, initialState, onLeave }) {
     socket.on('queueUpdate', (q) => setQueue(Array.isArray(q) ? q : []));
     socket.on('reaction', ({ emoji }) => spawnFloater(emoji));
     socket.on('system', (msg) => setActivity(typeof msg === 'string' ? msg : ''));
+    socket.on('chat', ({ name, text, time }) => {
+      setMessages((m) => [...m, { id: Math.random().toString(36).slice(2), mine: false, name, text, time }]);
+      setUnread((u) => (chatOpen ? 0 : u + 1));
+    });
     socket.on('peerLeft', () => setSyncStatus('Peer left — waiting for someone…'));
 
     return () => {
@@ -250,9 +263,10 @@ export default function Room({ roomCode, initialState, onLeave }) {
       socket.off('queueUpdate');
       socket.off('reaction');
       socket.off('system');
+      socket.off('chat');
       socket.off('peerLeft');
     };
-  }, [applyRoomState, applyRemotePlay, applyRemotePause, applyRemoteSeek, getPlayer, withRemoteApply, spawnFloater]);
+  }, [applyRoomState, applyRemotePlay, applyRemotePause, applyRemoteSeek, getPlayer, withRemoteApply, spawnFloater, chatOpen]);
 
   // Auto-clear the activity line after a few seconds.
   useEffect(() => {
@@ -260,6 +274,11 @@ export default function Room({ roomCode, initialState, onLeave }) {
     const t = window.setTimeout(() => setActivity(''), 4000);
     return () => window.clearTimeout(t);
   }, [activity]);
+
+  // Auto-scroll chat to the newest message.
+  useEffect(() => {
+    if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, chatOpen]);
 
   // ---- Local seek detection + drift correction loop --------------------------
   useEffect(() => {
@@ -383,6 +402,25 @@ export default function Room({ roomCode, initialState, onLeave }) {
     socket.emit('reaction', { emoji });
   }
 
+  // Send a chat message: add it locally and relay to the peer.
+  function handleSendChat() {
+    const text = chatInput.trim();
+    if (!text) return;
+    setMessages((m) => [...m, { id: Math.random().toString(36).slice(2), mine: true, name: 'You', text, time: Date.now() }]);
+    socket.emit('chat', { text });
+    setChatInput('');
+  }
+  function toggleChat() {
+    setChatOpen((o) => {
+      if (!o) setUnread(0);
+      return !o;
+    });
+  }
+  function handleVoiceToggle() {
+    if (inVoice) stopVoice();
+    else startVoice();
+  }
+
   // On-site YouTube search (proxied through the backend so the key stays secret).
   async function handleSearch() {
     const q = searchQuery.trim();
@@ -491,14 +529,67 @@ export default function Room({ roomCode, initialState, onLeave }) {
         {activity && <div className="activity-toast">{activity}</div>}
       </div>
 
-      {/* Emoji reaction bar. */}
+      {/* Emoji reaction bar + voice & chat toggles. */}
       <div className="reaction-bar">
         {['❤️', '😂', '😮', '👍', '🔥', '🎉', '😢', '👀'].map((e) => (
           <button key={e} className="reaction-btn" onClick={() => handleReact(e)}>
             {e}
           </button>
         ))}
+        <span className="reaction-spacer" />
+        <button
+          className={`btn tiny voice-btn ${inVoice ? 'on' : ''}`}
+          onClick={handleVoiceToggle}
+          title="Talk / sing live with your partner"
+        >
+          {inVoice ? '🎙️ Live' : '🎤 Voice'}
+        </button>
+        {inVoice && (
+          <button className={`btn tiny ${muted ? 'primary' : ''}`} onClick={toggleMute}>
+            {muted ? '🔇 Unmute' : '🔊 Mute'}
+          </button>
+        )}
+        <button className="btn tiny chat-toggle" onClick={toggleChat}>
+          💬 Chat{unread > 0 ? ` (${unread})` : ''}
+        </button>
       </div>
+
+      {inVoice && (
+        <div className={`voice-status ${voiceStatus}`}>
+          {voiceStatus === 'connected'
+            ? '🎙️ Voice connected — you can talk or sing together'
+            : '🎙️ Voice on — waiting for your partner to join voice…'}
+        </div>
+      )}
+
+      {chatOpen && (
+        <div className="chat-panel">
+          <div className="chat-messages">
+            {messages.length === 0 ? (
+              <div className="chat-empty">Say hi 👋 — messages are just between you two.</div>
+            ) : (
+              messages.map((m) => (
+                <div key={m.id} className={`chat-msg ${m.mine ? 'mine' : 'theirs'}`}>
+                  {!m.mine && <span className="chat-name">{m.name}</span>}
+                  <span className="chat-text">{m.text}</span>
+                </div>
+              ))
+            )}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="chat-input-row">
+            <input
+              type="text"
+              placeholder="Type a message…"
+              value={chatInput}
+              maxLength={500}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+            />
+            <button className="btn primary" onClick={handleSendChat}>Send</button>
+          </div>
+        </div>
+      )}
 
       <div className="controls">
         <button className="btn" onClick={handlePlay} disabled={!isReady || !videoId}>▶ Play</button>

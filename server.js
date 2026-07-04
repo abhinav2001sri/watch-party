@@ -250,6 +250,64 @@ io.on('connection', (socket) => {
   });
 
   // ---------------------------------------------------------------------------
+  // Text chat: relay a message to the peer with the sender's name + timestamp.
+  // ---------------------------------------------------------------------------
+  socket.on('chat', ({ text } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room || !text) return;
+    socket.to(room.__code).emit('chat', {
+      name: socket.data.name,
+      text: String(text).slice(0, 500),
+      time: Date.now(),
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Live voice chat (WebRTC). The server is only a signaling relay: it forwards
+  // SDP offers/answers and ICE candidates between the two peers. Audio flows
+  // peer-to-peer, never through the server.
+  // ---------------------------------------------------------------------------
+  socket.on('voice-join', () => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    room.voiceUsers = room.voiceUsers || new Set();
+    room.voiceUsers.add(socket.id);
+
+    // If the other user is already in voice, tell THIS (newly joined) socket to
+    // initiate the WebRTC offer, and let the peer know someone joined voice.
+    const others = [...room.voiceUsers].filter((id) => id !== socket.id);
+    if (others.length > 0) {
+      socket.emit('voice-initiate'); // newcomer creates the offer
+      socket.to(room.__code).emit('system', `${socket.data.name} joined voice`);
+    }
+  });
+
+  socket.on('voice-offer', ({ sdp } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    socket.to(room.__code).emit('voice-offer', { sdp });
+  });
+
+  socket.on('voice-answer', ({ sdp } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    socket.to(room.__code).emit('voice-answer', { sdp });
+  });
+
+  socket.on('voice-ice', ({ candidate } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    socket.to(room.__code).emit('voice-ice', { candidate });
+  });
+
+  socket.on('voice-leave', () => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    if (room.voiceUsers) room.voiceUsers.delete(socket.id);
+    socket.to(room.__code).emit('voice-peer-left');
+  });
+
+  // ---------------------------------------------------------------------------
   // Playback events. The server updates its authoritative state, stamps it with
   // the server time, then broadcasts to the *other* client(s) in the room.
   // A `startAtServerTime` slightly in the future is included for play events so
@@ -397,6 +455,7 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     room.users.delete(socket.id);
+    if (room.voiceUsers) room.voiceUsers.delete(socket.id);
     socket.leave(roomCode);
     socket.data.roomCode = null;
 
@@ -407,6 +466,7 @@ io.on('connection', (socket) => {
       // If the first user leaves, the remaining user keeps the room + state.
       io.to(roomCode).emit('userCount', room.users.size);
       io.to(roomCode).emit('peerLeft');
+      io.to(roomCode).emit('voice-peer-left');
     }
   }
 
