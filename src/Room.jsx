@@ -17,7 +17,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { socket, serverNow, getClockOffset } from './socket.js';
 import { useYouTubePlayer } from './useYouTubePlayer.js';
 import { useVoiceChat } from './useVoiceChat.js';
-import { parseVideoId, formatTime } from './utils.js';
+import { parseVideoId, parsePlaylistId, formatTime } from './utils.js';
 
 // YouTube player state constants.
 const YT_PLAYING = 1;
@@ -35,10 +35,6 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [queue, setQueue] = useState(initialState?.queue || []);
   const [activity, setActivity] = useState('');
   const [floaters, setFloaters] = useState([]); // { id, emoji, left }
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchState, setSearchState] = useState('idle'); // idle | loading | done | no-key | error
-  const [showSearch, setShowSearch] = useState(false);
   const [messages, setMessages] = useState([]); // { id, mine, name, text, time }
   const [chatInput, setChatInput] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
@@ -378,12 +374,26 @@ export default function Room({ roomCode, initialState, onLeave }) {
     socket.emit('requestRoomState');
   }
   function handleChangeVideo() {
+    // A pasted playlist link takes priority: expand it into the queue and play.
+    const list = parsePlaylistId(changeVideoInput);
+    if (list) {
+      setChangeVideoInput('');
+      socket.emit('addPlaylistToQueue', { list });
+      return;
+    }
     const id = parseVideoId(changeVideoInput);
     if (!id) return;
     setChangeVideoInput('');
     socket.emit('changeVideo', { videoId: id });
   }
   function handleAddToQueue() {
+    // If the input is a playlist, add every video from it.
+    const list = parsePlaylistId(changeVideoInput);
+    if (list) {
+      setChangeVideoInput('');
+      socket.emit('addPlaylistToQueue', { list });
+      return;
+    }
     const id = parseVideoId(changeVideoInput);
     if (!id) return;
     setChangeVideoInput('');
@@ -419,39 +429,6 @@ export default function Room({ roomCode, initialState, onLeave }) {
   function handleVoiceToggle() {
     if (inVoice) stopVoice();
     else startVoice();
-  }
-
-  // On-site YouTube search (proxied through the backend so the key stays secret).
-  async function handleSearch() {
-    const q = searchQuery.trim();
-    if (!q) return;
-    setSearchState('loading');
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      if (data.ok) {
-        setSearchResults(data.items || []);
-        setSearchState('done');
-      } else if (data.reason === 'no-key') {
-        setSearchState('no-key');
-        setSearchResults([]);
-      } else {
-        setSearchState('error');
-        setSearchResults([]);
-      }
-    } catch {
-      setSearchState('error');
-      setSearchResults([]);
-    }
-  }
-  function handlePlayResult(videoId) {
-    socket.emit('changeVideo', { videoId });
-    setShowSearch(false);
-    setSearchResults([]);
-    setSearchQuery('');
-  }
-  function handleQueueResult(videoId) {
-    socket.emit('addToQueue', { videoId });
   }
 
   function handleCopy() {
@@ -598,61 +575,12 @@ export default function Room({ roomCode, initialState, onLeave }) {
         <button className="btn" onClick={handleSkip} disabled={queue.length === 0} title="Play the next queued video">
           ⏭ Next ({queue.length})
         </button>
-        <button className="btn" onClick={() => setShowSearch((s) => !s)}>
-          🔍 {showSearch ? 'Close search' : 'Search YouTube'}
-        </button>
       </div>
-
-      {showSearch && (
-        <div className="search-panel">
-          <div className="search-row">
-            <input
-              type="text"
-              placeholder="Search YouTube…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <button className="btn primary" onClick={handleSearch}>Search</button>
-          </div>
-
-          {searchState === 'loading' && <div className="search-note">Searching…</div>}
-          {searchState === 'no-key' && (
-            <div className="search-note">
-              Search needs a free YouTube API key. Add <code>YOUTUBE_API_KEY</code> in your
-              server environment (Render → Environment) to enable it. You can still paste
-              links below meanwhile.
-            </div>
-          )}
-          {searchState === 'error' && <div className="search-note">Search failed. Try again.</div>}
-          {searchState === 'done' && searchResults.length === 0 && (
-            <div className="search-note">No results.</div>
-          )}
-
-          {searchResults.length > 0 && (
-            <ul className="search-results">
-              {searchResults.map((r) => (
-                <li className="search-item" key={r.videoId}>
-                  <img className="search-thumb" src={r.thumbnail} alt="" loading="lazy" />
-                  <div className="search-meta">
-                    <span className="search-title">{r.title}</span>
-                    <span className="search-channel">{r.channel}</span>
-                  </div>
-                  <div className="search-actions">
-                    <button className="btn tiny primary" onClick={() => handlePlayResult(r.videoId)}>Play</button>
-                    <button className="btn tiny" onClick={() => handleQueueResult(r.videoId)}>＋ Queue</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
 
       <div className="change-video">
         <input
           type="text"
-          placeholder="Paste a YouTube URL or video ID"
+          placeholder="Paste a YouTube video or playlist URL / ID"
           value={changeVideoInput}
           onChange={(e) => setChangeVideoInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleChangeVideo()}

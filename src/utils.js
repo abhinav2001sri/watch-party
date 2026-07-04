@@ -49,6 +49,24 @@ export function parseVideoId(input) {
   return match ? match[0] : null;
 }
 
+// Extract a YouTube playlist ID from a URL (the `list=` query param), e.g.
+//   https://www.youtube.com/playlist?list=PLxxxx
+//   https://www.youtube.com/watch?v=VIDEOID&list=PLxxxx
+// Ignores auto-generated mixes (list ids starting with "RD") which cannot be
+// expanded via the Data API. Returns the playlist id, or null.
+export function parsePlaylistId(input) {
+  if (!input) return null;
+  const value = input.trim();
+  try {
+    const url = new URL(value);
+    const list = url.searchParams.get('list');
+    if (list && !/^RD/.test(list)) return list;
+  } catch {
+    // Not a URL.
+  }
+  return null;
+}
+
 // Format seconds as m:ss (or h:mm:ss).
 export function formatTime(totalSeconds) {
   if (!isFinite(totalSeconds) || totalSeconds < 0) totalSeconds = 0;

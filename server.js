@@ -29,45 +29,6 @@ app.use(cors());
 // Serve the production build if it exists (npm run build -> dist/).
 app.use(express.static('dist'));
 
-// ---------------------------------------------------------------------------
-// On-site YouTube search. Proxied through the backend so the API key stays
-// server-side (never shipped to the browser). Set YOUTUBE_API_KEY in the host's
-// environment (e.g. Render -> Environment). Without a key this returns a clear
-// message instead of failing silently.
-// ---------------------------------------------------------------------------
-app.get('/api/search', async (req, res) => {
-  const q = (req.query.q || '').toString().trim();
-  const key = process.env.YOUTUBE_API_KEY;
-
-  if (!key) {
-    return res.status(200).json({ ok: false, reason: 'no-key', items: [] });
-  }
-  if (!q) {
-    return res.status(200).json({ ok: true, items: [] });
-  }
-
-  try {
-    const url =
-      'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12' +
-      `&q=${encodeURIComponent(q)}&key=${key}`;
-    const r = await fetch(url);
-    if (!r.ok) {
-      const body = await r.text();
-      return res.status(200).json({ ok: false, reason: 'api-error', detail: body, items: [] });
-    }
-    const data = await r.json();
-    const items = (data.items || []).map((it) => ({
-      videoId: it.id.videoId,
-      title: it.snippet.title,
-      channel: it.snippet.channelTitle,
-      thumbnail: it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url,
-    }));
-    return res.json({ ok: true, items });
-  } catch (e) {
-    return res.status(200).json({ ok: false, reason: 'exception', detail: String(e), items: [] });
-  }
-});
-
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
@@ -136,6 +97,55 @@ async function fetchVideoMeta(videoId) {
     return { title: data.title || videoId, thumbnail: data.thumbnail_url || thumbnail };
   } catch {
     return { title: videoId, thumbnail };
+  }
+}
+
+// Expand a YouTube playlist into individual videos using the Data API's
+// playlistItems endpoint (requires YOUTUBE_API_KEY — the same key search uses).
+// Paginates up to `cap` videos, skips private/deleted entries, and returns
+// [{ videoId, title, thumbnail }]. Returns { ok:false, reason } on failure so
+// the caller can surface a friendly message.
+async function fetchPlaylistItems(listId, cap = 200) {
+  const key = process.env.YOUTUBE_API_KEY;
+  if (!key) return { ok: false, reason: 'no-key', items: [] };
+
+  const items = [];
+  let pageToken = '';
+  try {
+    // Loop pages until we run out or hit the cap.
+    do {
+      const url =
+        'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50' +
+        `&playlistId=${encodeURIComponent(listId)}&key=${key}` +
+        (pageToken ? `&pageToken=${pageToken}` : '');
+      const r = await fetch(url);
+      if (!r.ok) {
+        const detail = await r.text();
+        return { ok: false, reason: 'api-error', detail, items };
+      }
+      const data = await r.json();
+      for (const it of data.items || []) {
+        const s = it.snippet || {};
+        const videoId = s.resourceId?.videoId;
+        const title = s.title || '';
+        // Skip private/deleted videos (no playable id or placeholder titles).
+        if (!videoId || title === 'Private video' || title === 'Deleted video') continue;
+        items.push({
+          videoId,
+          title: title || videoId,
+          thumbnail:
+            s.thumbnails?.medium?.url ||
+            s.thumbnails?.default?.url ||
+            `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+        });
+        if (items.length >= cap) break;
+      }
+      pageToken = data.nextPageToken || '';
+    } while (pageToken && items.length < cap);
+
+    return { ok: true, items };
+  } catch (e) {
+    return { ok: false, reason: 'exception', detail: String(e), items };
   }
 }
 
@@ -417,6 +427,51 @@ io.on('connection', (socket) => {
     socket.to(code).emit('system', `${socket.data.name} added "${meta.title}" to the queue`);
   });
 
+  // Add an entire YouTube playlist to the shared queue. Expands server-side via
+  // the Data API so the key stays secret and both users get the same result.
+  socket.on('addPlaylistToQueue', async ({ list } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room || !list) return;
+
+    const result = await fetchPlaylistItems(list);
+    if (!result.ok) {
+      const msg =
+        result.reason === 'no-key'
+          ? 'Playlist import needs a YouTube API key (set YOUTUBE_API_KEY on the server).'
+          : 'Could not load that playlist. Make sure it is public or unlisted.';
+      socket.emit('errorMessage', msg);
+      return;
+    }
+    if (result.items.length === 0) {
+      socket.emit('errorMessage', 'That playlist had no playable videos.');
+      return;
+    }
+
+    // Re-resolve the room in case things changed during the await.
+    const code = socket.data.roomCode;
+    const liveRoom = rooms[code];
+    if (!liveRoom) return;
+
+    let videos = result.items;
+
+    // If nothing is loaded yet, make the first video the current one and cue it.
+    if (!liveRoom.videoId) {
+      const first = videos[0];
+      videos = videos.slice(1);
+      liveRoom.videoId = first.videoId;
+      liveRoom.isPlaying = false;
+      liveRoom.currentTime = 0;
+      liveRoom.lastUpdatedServerTime = Date.now();
+      io.to(code).emit('changeVideo', { videoId: first.videoId, autoplay: false, serverTime: Date.now() });
+    }
+
+    for (const v of videos) {
+      liveRoom.queue.push({ id: randomId(), videoId: v.videoId, title: v.title, thumbnail: v.thumbnail });
+    }
+    io.to(code).emit('queueUpdate', liveRoom.queue);
+    io.to(code).emit('system', `${socket.data.name} added ${result.items.length} videos from a playlist`);
+  });
+
   // Remove a specific item from the queue.
   socket.on('removeFromQueue', ({ id } = {}) => {
     const room = getSocketRoom(socket);
@@ -424,8 +479,6 @@ io.on('connection', (socket) => {
     room.queue = (room.queue || []).filter((item) => item.id !== id);
     io.to(room.__code).emit('queueUpdate', room.queue);
   });
-
-  // Skip to the next video in the queue immediately ("Next" button).
   socket.on('skipVideo', () => {
     const room = getSocketRoom(socket);
     if (!room) return;
