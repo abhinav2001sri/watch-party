@@ -58,9 +58,6 @@ export default function Home({ onEnterRoom }) {
     <div className="home">
       <div className="hero">
         <h1>🎬 Watch Party</h1>
-        <p className="subtitle">
-          Watch YouTube together, perfectly in sync. Up to six people, one room.
-        </p>
       </div>
 
       <div className="name-field">
