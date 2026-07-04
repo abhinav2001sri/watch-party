@@ -541,6 +541,10 @@ export default function Room({ roomCode, initialState, onLeave }) {
 
       {chatOpen && (
         <div className="chat-panel">
+          <div className="chat-panel-header">
+            <span className="chat-panel-title">💬 Chat</span>
+            <button className="chat-close" onClick={toggleChat} title="Close chat" aria-label="Close chat">✕</button>
+          </div>
           <div className="chat-messages">
             {messages.length === 0 ? (
               <div className="chat-empty">Say hi 👋 — messages are just between you two.</div>
