@@ -1,8 +1,8 @@
-# Render.com blueprint — one-click deploy for the YouTube Watch Party.
+# Render.com blueprint — one-click deploy for JamAlong.
 # In Render: New + -> Blueprint -> pick your repo. Render reads this file.
 services:
   - type: web
-    name: youtube-watch-party
+    name: jamalong
     runtime: node
     plan: free
     buildCommand: npm install && npm run build

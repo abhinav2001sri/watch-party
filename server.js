@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// YouTube Watch Party - Backend server
+// JamAlong - Backend server
 //
 // Express + Socket.IO server that acts as the *single source of truth* for room
 // playback state. Rooms are kept in memory only (no database). A maximum of two
@@ -544,5 +544,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n  YouTube Watch Party server running on http://localhost:${PORT}\n`);
+  console.log(`\n  JamAlong server running on http://localhost:${PORT}\n`);
 });

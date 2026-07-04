@@ -57,7 +57,7 @@ export default function Home({ onEnterRoom }) {
   return (
     <div className="home">
       <div className="hero">
-        <h1>🎬 Watch Party</h1>
+        <h1>🎤 JamAlong</h1>
       </div>
 
       <div className="name-field">

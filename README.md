@@ -1,4 +1,4 @@
-# 🎬 YouTube Watch Party
+# 🎤 JamAlong
 
 Watch YouTube together, perfectly in sync. Up to **six people** can enter the
 same room and share synchronized **play, pause, seek, and video changes** across

@@ -1,7 +1,7 @@
 {
-  "name": "youtube-watch-party",
+  "name": "jamalong",
   "version": "1.0.0",
-  "description": "A YouTube watch-party website where exactly two people can watch the same video with synchronized play, pause, seek and timestamp syncing.",
+  "description": "JamAlong — a website where up to six people watch the same YouTube video together in sync, with group voice, text chat, reactions and karaoke vibes.",
   "type": "module",
   "scripts": {
     "dev": "vite",

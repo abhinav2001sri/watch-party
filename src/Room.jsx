@@ -445,8 +445,8 @@ export default function Room({ roomCode, initialState, onLeave }) {
   function handleShare() {
     const joinUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
     const shareData = {
-      title: 'Watch Party',
-      text: `Join my watch party! Room ${roomCode}`,
+      title: 'JamAlong',
+      text: `Join my JamAlong room ${roomCode}!`,
       url: joinUrl,
     };
     if (navigator.share) {
@@ -477,7 +477,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
             {shared ? '✓ Link copied' : '🔗 Share'}
           </button>
         </div>
-        <div className="room-brand">🎬 Watch Party</div>
+        <div className="room-brand">🎤 JamAlong</div>
         <div className="room-status">
           <span className={`dot ${userCount >= 2 ? 'green' : 'amber'}`} />
           {syncStatus}
