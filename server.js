@@ -215,6 +215,44 @@ async function fetchPlaylistItems(listId, cap = 200) {
   return { ok: false, reason: 'not-found', items: [] };
 }
 
+// Search YouTube for videos matching a text query, using the Data API's search
+// endpoint (requires YOUTUBE_API_KEY). Returns up to `max` results as
+// [{ videoId, title, channel, thumbnail }]. NOTE: search costs 100 quota units
+// per call (vs ~1 for a playlist), so the free tier allows ~100 searches/day.
+async function searchYouTube(query, max = 10) {
+  const key = process.env.YOUTUBE_API_KEY;
+  if (!key) return { ok: false, reason: 'no-key', results: [] };
+  try {
+    const url =
+      'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&safeSearch=moderate' +
+      `&maxResults=${max}&q=${encodeURIComponent(query)}&key=${key}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      const detail = await r.text();
+      return { ok: false, reason: 'api-error', detail, results: [] };
+    }
+    const data = await r.json();
+    const results = [];
+    for (const it of data.items || []) {
+      const videoId = it.id?.videoId;
+      const s = it.snippet || {};
+      if (!videoId) continue;
+      results.push({
+        videoId,
+        title: decodeEntities(s.title || videoId),
+        channel: decodeEntities(s.channelTitle || ''),
+        thumbnail:
+          s.thumbnails?.medium?.url ||
+          s.thumbnails?.default?.url ||
+          `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      });
+    }
+    return { ok: true, results };
+  } catch (e) {
+    return { ok: false, reason: 'exception', detail: String(e), results: [] };
+  }
+}
+
 // Advance to the next queued video (if any) and broadcast the change. The next
 // video autoplays so the session flows continuously.
 function advanceQueue(room, code) {
@@ -541,6 +579,18 @@ io.on('connection', (socket) => {
     }
     io.to(code).emit('queueUpdate', liveRoom.queue);
     io.to(code).emit('system', `${socket.data.name} added ${result.items.length} videos from a playlist`);
+  });
+
+  // Search YouTube and return results only to the requesting user (via ack).
+  // Playing/queueing a result then broadcasts to the whole room as usual.
+  socket.on('searchVideos', async ({ query } = {}, ack) => {
+    if (typeof ack !== 'function') return;
+    const room = getSocketRoom(socket);
+    if (!room) return ack({ ok: false, reason: 'no-room', results: [] });
+    const q = (query || '').trim();
+    if (!q) return ack({ ok: false, reason: 'empty', results: [] });
+    const res = await searchYouTube(q);
+    ack(res);
   });
 
   // Remove a specific item from the queue.

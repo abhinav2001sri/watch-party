@@ -132,6 +132,8 @@ Then open **http://localhost:3001**.
   expanded into the shared queue and played in order. Works with **no setup** via
   YouTube's public feed (up to ~15 videos); add a free API key to import larger
   playlists (up to 200).
+- 🔎 **Search YouTube** — type a song/video name and pick from results (thumbnail +
+  title) to **play now** or **add to queue**. Requires a free API key (see below).
 - 🙋 **Display names** — pick a name; see "Alex paused / added a video".
 - 😀 **Emoji reactions** — floating emoji both people see in real time.
 - 💬 **Text chat** — group chat panel (floating popup) with unread badge.
@@ -160,6 +162,14 @@ the server prefers it when present and falls back to the feed otherwise:
 
 Only **public or unlisted** playlists work. Private playlists and auto-generated
 mixes (list IDs starting with `RD`) can't be expanded.
+
+## YouTube search (needs the API key)
+
+The **🔎 Search** box in a room lets anyone find a video by name and play it or
+queue it — results are fetched server-side with the same `YOUTUBE_API_KEY` above.
+Without a key, the search box shows a friendly note and pasting links/playlists
+still works. Heads-up on quota: **each search costs 100 units** (vs ~1 for a
+playlist), so the free 10,000/day tier allows roughly **100 searches per day**.
 
 ## Limitations
 

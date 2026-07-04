@@ -32,6 +32,10 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [drift, setDrift] = useState(0);
   const [syncStatus, setSyncStatus] = useState('Connecting…');
   const [changeVideoInput, setChangeVideoInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [queue, setQueue] = useState(initialState?.queue || []);
   const [activity, setActivity] = useState('');
   const [floaters, setFloaters] = useState([]); // { id, emoji, left }
@@ -401,6 +405,35 @@ export default function Room({ roomCode, initialState, onLeave }) {
     setChangeVideoInput('');
     socket.emit('addToQueue', { videoId: id });
   }
+  function handleSearch() {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSearching(true);
+    setSearchError('');
+    socket.emit('searchVideos', { query: q }, (res) => {
+      setSearching(false);
+      if (!res || !res.ok) {
+        setSearchResults([]);
+        setSearchError(
+          res && res.reason === 'no-key'
+            ? 'Search needs a YouTube API key on the server. Pasting links and playlists still works.'
+            : 'Search failed — please try again in a moment.'
+        );
+        return;
+      }
+      setSearchResults(res.results || []);
+      if ((res.results || []).length === 0) setSearchError('No results. Try different words.');
+    });
+  }
+  function handlePlayResult(id) {
+    socket.emit('changeVideo', { videoId: id });
+    setSearchResults([]);
+    setSearchQuery('');
+    setSearchError('');
+  }
+  function handleQueueResult(id) {
+    socket.emit('addToQueue', { videoId: id });
+  }
   function handleSkip() {
     socket.emit('skipVideo');
   }
@@ -594,6 +627,47 @@ export default function Room({ roomCode, initialState, onLeave }) {
         />
         <button className="btn" onClick={handleAddToQueue}>＋ Add to queue</button>
         <button className="btn primary" onClick={handleChangeVideo}>Play now</button>
+      </div>
+
+      <div className="search-box">
+        <div className="search-row">
+          <input
+            type="text"
+            placeholder="🔎 Search YouTube for a song or video…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          />
+          <button
+            className="btn primary"
+            onClick={handleSearch}
+            disabled={searching || !searchQuery.trim()}
+          >
+            {searching ? 'Searching…' : 'Search'}
+          </button>
+        </div>
+        {searchError && <div className="search-error">{searchError}</div>}
+        {searchResults.length > 0 && (
+          <ul className="search-results">
+            {searchResults.map((r) => (
+              <li className="search-result" key={r.videoId}>
+                <img className="search-thumb" src={r.thumbnail} alt="" loading="lazy" />
+                <div className="search-meta">
+                  <span className="search-title">{r.title}</span>
+                  <span className="search-channel">{r.channel}</span>
+                </div>
+                <div className="search-actions">
+                  <button className="btn tiny" onClick={() => handleQueueResult(r.videoId)}>
+                    ＋ Queue
+                  </button>
+                  <button className="btn tiny primary" onClick={() => handlePlayResult(r.videoId)}>
+                    ▶ Play
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="queue">
