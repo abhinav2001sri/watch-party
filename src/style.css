@@ -43,23 +43,30 @@ body {
   100% { background-position: 0% 50%; }
 }
 
-/* Floating cute shapes behind everything. */
-.app::before {
-  content: '🎬  🍿  💕  ✨  🎧  🌈  ⭐  🎵';
+/* Flying music notes + emojis drifting up the background (decorative). */
+.bg-floaters {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  font-size: 28px;
-  letter-spacing: 60px;
-  line-height: 120px;
-  white-space: pre-wrap;
-  opacity: 0.16;
-  animation: floatUp 40s linear infinite;
+  overflow: hidden;
 }
-@keyframes floatUp {
-  0% { transform: translateY(10%); }
-  100% { transform: translateY(-30%); }
+.bg-floater {
+  position: absolute;
+  bottom: -60px;
+  opacity: 0;
+  filter: drop-shadow(0 2px 6px rgba(120, 40, 180, 0.25));
+  animation-name: bgFloatUp;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+@keyframes bgFloatUp {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.5; }
+  50% { transform: translateY(-55vh) translateX(var(--drift)) rotate(180deg); opacity: 0.55; }
+  90% { opacity: 0.4; }
+  100% { transform: translateY(-108vh) translateX(0) rotate(360deg); opacity: 0; }
 }
 
 /* A soft translucent surface so content stays readable over the cute bg. */
@@ -459,18 +466,18 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
 .voice-status {
   text-align: center;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 10px 14px;
   border-radius: var(--radius);
   margin-bottom: 16px;
   border: 1px solid var(--border);
-  background: rgba(56, 214, 255, 0.1);
-  color: var(--muted);
+  background: rgba(56, 214, 255, 0.14);
+  color: #1a1030;
 }
 .voice-status.connected {
-  background: rgba(57, 247, 176, 0.14);
+  background: rgba(57, 247, 176, 0.18);
   border-color: rgba(57, 247, 176, 0.5);
-  color: var(--green);
+  color: #10321f;
 }
 
 /* Text chat panel */

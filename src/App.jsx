@@ -67,12 +67,58 @@ export default function App() {
 
   return (
     <div className="app">
+      <BackgroundFloaters />
       {banner && <div className="global-banner">{banner}</div>}
       {room ? (
         <Room roomCode={room.code} initialState={room.state} onLeave={leaveRoom} />
       ) : (
         <Home onEnterRoom={enterRoom} />
       )}
+    </div>
+  );
+}
+
+// A calm layer of flying music notes + fun emojis drifting up the background.
+// A good number of them (not a wall), each with its own lane, size, speed and
+// delay so the motion feels organic. Purely decorative (pointer-events: none).
+const BG_EMOJIS = [
+  '🎵', '🎶', '🎬', '🍿', '🎧', '🎤', '⭐', '✨',
+  '🎵', '🎶', '💜', '🎸', '🎹', '🌈', '🎵', '🎶',
+  '🎼', '💫', '🎧', '🎵',
+];
+
+function BackgroundFloaters() {
+  // Compute stable, spread-out props once per mount.
+  const items = React.useMemo(
+    () =>
+      BG_EMOJIS.map((emoji, i) => {
+        const left = (i * 100) / BG_EMOJIS.length + (Math.random() * 4 - 2); // spread across width
+        const size = 22 + Math.round(Math.random() * 26); // 22–48px
+        const duration = 16 + Math.random() * 16; // 16–32s
+        const delay = -Math.random() * 32; // negative so they're mid-flight on load
+        const drift = `${Math.round(Math.random() * 60 - 30)}px`; // horizontal sway
+        return { emoji, left, size, duration, delay, drift, key: i };
+      }),
+    []
+  );
+
+  return (
+    <div className="bg-floaters" aria-hidden="true">
+      {items.map((it) => (
+        <span
+          key={it.key}
+          className="bg-floater"
+          style={{
+            left: `${it.left}%`,
+            fontSize: `${it.size}px`,
+            animationDuration: `${it.duration}s`,
+            animationDelay: `${it.delay}s`,
+            '--drift': it.drift,
+          }}
+        >
+          {it.emoji}
+        </span>
+      ))}
     </div>
   );
 }
