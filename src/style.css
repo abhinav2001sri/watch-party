@@ -71,7 +71,7 @@ body {
 
 /* A soft translucent surface so content stays readable over the cute bg. */
 .app > * { position: relative; z-index: 1; }
-.app > .bg-floaters { z-index: 0; }
+.app > .bg-floaters { position: fixed; z-index: 0; }
 
 .app {
   min-height: 100%;
