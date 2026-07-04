@@ -129,7 +129,9 @@ Then open **http://localhost:3001**.
 - 📋 **Shared queue / playlist** — add, remove, auto-advance on end, skip button,
   titles + thumbnails (via YouTube oEmbed, no key).
 - 🎵 **Paste a whole playlist** — drop a YouTube playlist URL and every video is
-  expanded into the shared queue and played in order (requires the free API key).
+  expanded into the shared queue and played in order. Works with **no setup** via
+  YouTube's public feed (up to ~15 videos); add a free API key to import larger
+  playlists (up to 200).
 - 🙋 **Display names** — pick a name; see "Alex paused / added a video".
 - 😀 **Emoji reactions** — floating emoji both people see in real time.
 - 💬 **Text chat** — group chat panel (floating popup) with unread badge.
@@ -141,17 +143,23 @@ Then open **http://localhost:3001**.
 - 📱 **Mobile-friendly** — sticky video, touch-sized controls, safe-area padding.
 - 🌈 **Bright, cute animated pastel background & vibrant theme.**
 
-## Enabling playlist import (optional, free)
+## Playlist import (works out of the box)
 
-Playlist import is proxied through the backend so your API key stays server-side
-and is never shipped to the browser. Without a key, everything else works; pasting
-a playlist shows a friendly note (you can always paste individual video links).
+Pasting a playlist URL works with **no configuration**: the backend reads YouTube's
+public RSS feed for the playlist (no key, no browser exposure). That feed is capped
+at roughly the **15 most recent videos**, which is plenty for most rooms.
+
+To import **larger** playlists (up to 200 videos), add a free YouTube Data API key —
+the server prefers it when present and falls back to the feed otherwise:
 
 1. Create a key: Google Cloud Console → enable **YouTube Data API v3** → create an
    API key. (Free tier: 10,000 units/day; a playlist page costs ~1 unit.)
 2. Provide it to the server as the `YOUTUBE_API_KEY` environment variable:
    - **Local:** `setx YOUTUBE_API_KEY "your-key"` (new terminal), or set it inline.
    - **Render:** service → **Environment** → add `YOUTUBE_API_KEY` → save (redeploys).
+
+Only **public or unlisted** playlists work. Private playlists and auto-generated
+mixes (list IDs starting with `RD`) can't be expanded.
 
 ## Limitations
 

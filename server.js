@@ -103,19 +103,27 @@ async function fetchVideoMeta(videoId) {
   }
 }
 
-// Expand a YouTube playlist into individual videos using the Data API's
-// playlistItems endpoint (requires YOUTUBE_API_KEY — the same key search uses).
-// Paginates up to `cap` videos, skips private/deleted entries, and returns
-// [{ videoId, title, thumbnail }]. Returns { ok:false, reason } on failure so
-// the caller can surface a friendly message.
-async function fetchPlaylistItems(listId, cap = 200) {
+// Decode the handful of XML/HTML entities that show up in feed titles.
+function decodeEntities(str = '') {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
+}
+
+// Expand a playlist using the YouTube Data API (needs YOUTUBE_API_KEY). Paginates
+// up to `cap` videos and returns the full list. This is the richest source, but
+// it only runs when a key is configured on the server.
+async function fetchPlaylistViaApi(listId, cap) {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) return { ok: false, reason: 'no-key', items: [] };
 
   const items = [];
   let pageToken = '';
   try {
-    // Loop pages until we run out or hit the cap.
     do {
       const url =
         'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50' +
@@ -131,7 +139,6 @@ async function fetchPlaylistItems(listId, cap = 200) {
         const s = it.snippet || {};
         const videoId = s.resourceId?.videoId;
         const title = s.title || '';
-        // Skip private/deleted videos (no playable id or placeholder titles).
         if (!videoId || title === 'Private video' || title === 'Deleted video') continue;
         items.push({
           videoId,
@@ -150,6 +157,62 @@ async function fetchPlaylistItems(listId, cap = 200) {
   } catch (e) {
     return { ok: false, reason: 'exception', detail: String(e), items };
   }
+}
+
+// Expand a playlist using YouTube's public RSS feed — no API key required. This
+// works for any public/unlisted playlist but only returns the most recent ~15
+// videos (a hard limit of the feed). Great as a keyless fallback.
+async function fetchPlaylistViaRss(listId) {
+  try {
+    const url = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(listId)}`;
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9' },
+    });
+    if (!r.ok) return { ok: false, reason: 'rss-error', items: [] };
+    const xml = await r.text();
+
+    const items = [];
+    const seen = new Set();
+    // Each <entry> holds a <yt:videoId> and a <title>.
+    const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
+    let m;
+    while ((m = entryRe.exec(xml))) {
+      const block = m[1];
+      const idMatch = block.match(/<yt:videoId>([\w-]{11})<\/yt:videoId>/);
+      const titleMatch = block.match(/<title>([\s\S]*?)<\/title>/);
+      const videoId = idMatch?.[1];
+      if (!videoId || seen.has(videoId)) continue;
+      seen.add(videoId);
+      items.push({
+        videoId,
+        title: decodeEntities(titleMatch?.[1] || videoId),
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      });
+    }
+    return { ok: true, items };
+  } catch (e) {
+    return { ok: false, reason: 'exception', detail: String(e), items: [] };
+  }
+}
+
+// Expand a YouTube playlist into individual videos [{ videoId, title, thumbnail }].
+// Tries the Data API first (complete, up to `cap` videos) when a key is set, then
+// falls back to the keyless RSS feed (up to ~15 videos). Returns { ok:false, reason }
+// on failure so the caller can surface a friendly message.
+async function fetchPlaylistItems(listId, cap = 200) {
+  // Prefer the API when a key is available and it actually returns videos.
+  if (process.env.YOUTUBE_API_KEY) {
+    const api = await fetchPlaylistViaApi(listId, cap);
+    if (api.ok && api.items.length > 0) return { ...api, source: 'api' };
+  }
+
+  // Keyless fallback: works out of the box, capped at ~15 by YouTube's feed.
+  const rss = await fetchPlaylistViaRss(listId);
+  if (rss.ok && rss.items.length > 0) {
+    return { ok: true, items: rss.items.slice(0, cap), source: 'rss' };
+  }
+
+  return { ok: false, reason: 'not-found', items: [] };
 }
 
 // Advance to the next queued video (if any) and broadcast the change. The next
@@ -444,11 +507,10 @@ io.on('connection', (socket) => {
 
     const result = await fetchPlaylistItems(list);
     if (!result.ok) {
-      const msg =
-        result.reason === 'no-key'
-          ? 'Playlist import needs a YouTube API key (set YOUTUBE_API_KEY on the server).'
-          : 'Could not load that playlist. Make sure it is public or unlisted.';
-      socket.emit('errorMessage', msg);
+      socket.emit(
+        'errorMessage',
+        'Could not load that playlist. Make sure it is public or unlisted (private playlists and auto-generated mixes are not supported).'
+      );
       return;
     }
     if (result.items.length === 0) {
