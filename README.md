@@ -1,6 +1,6 @@
 # 🎬 YouTube Watch Party
 
-Watch YouTube together, perfectly in sync. Exactly **two people** can enter the
+Watch YouTube together, perfectly in sync. Up to **six people** can enter the
 same room and share synchronized **play, pause, seek, and video changes** across
 their devices. The server is the single source of truth for timing, and clients
 run drift correction to stay closely aligned.
@@ -109,7 +109,7 @@ Then open **http://localhost:3001**.
   **playback rate** briefly instead.
 - An `isApplyingRemoteUpdate` flag prevents **feedback loops** so remote-driven
   changes are not rebroadcast.
-- **Room lifecycle:** max 2 users; if the first user leaves the second keeps the
+- **Room lifecycle:** up to 6 users; if a user leaves the others keep the
   room and its state; when everyone leaves the room is deleted from memory.
 
 ## Socket events
@@ -118,7 +118,7 @@ Then open **http://localhost:3001**.
 `changeVideo`, `addToQueue`, `removeFromQueue`, `skipVideo`, `videoEnded`,
 `queueUpdate`, `reaction`, `chat`, `system`, `requestRoomState`,
 `addPlaylistToQueue`,
-`voice-join`, `voice-leave`, `voice-initiate`, `voice-offer`, `voice-answer`,
+`voice-join`, `voice-leave`, `voice-peers`, `voice-offer`, `voice-answer`,
 `voice-ice`, `voice-peer-left`,
 `syncRequest`/`syncResponse`, `userCount`, `peerLeft`, `roomFull`, `errorMessage`.
 
@@ -132,10 +132,10 @@ Then open **http://localhost:3001**.
   expanded into the shared queue and played in order (requires the free API key).
 - 🙋 **Display names** — pick a name; see "Alex paused / added a video".
 - 😀 **Emoji reactions** — floating emoji both people see in real time.
-- 💬 **Text chat** — private 1:1 chat panel with unread badge, right in the room.
-- 🎤 **Live voice / karaoke** — talk or sing together over peer-to-peer WebRTC audio
-  (with mute toggle). Signaling runs through Socket.IO; audio flows directly
-  between the two browsers.
+- 💬 **Text chat** — group chat panel (floating popup) with unread badge.
+- 🎤 **Live group voice / karaoke** — everyone in the room can talk or sing together
+  over a peer-to-peer WebRTC **mesh** (with mute toggle). Signaling runs through
+  Socket.IO; audio flows directly between browsers. Best for small groups (up to 6).
 - 🔗 **One-click join links & native share** — share `?room=CODE` links; on phones
   the Share button opens the native share sheet.
 - 📱 **Mobile-friendly** — sticky video, touch-sized controls, safe-area padding.
@@ -161,8 +161,11 @@ model plus continuous drift correction keeps both devices **closely
 synchronized** (typically well under a second apart). Autoplay policies may
 require a user interaction (a click) before playback starts in some browsers.
 
-**Voice chat across different networks:** live voice uses peer-to-peer WebRTC with
-free public **STUN** servers, which works for most home networks. Some strict or
+**Voice chat across different networks:** live voice uses a peer-to-peer WebRTC
+**mesh** (each participant connects to every other) with free public **STUN**
+servers, which works for most home networks and small groups. Some strict or
 symmetric NATs (common on mobile carriers or corporate Wi-Fi) may block the direct
 connection — a **TURN** relay server would be needed for those cases, and one is
-**not included** here. Text chat and video sync always work regardless of network.
+**not included** here. Very large groups would also need a media server (SFU);
+the mesh is intended for up to ~6 people. Text chat and video sync always work
+regardless of network.

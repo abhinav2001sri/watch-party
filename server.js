@@ -36,6 +36,9 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3001;
 
+// Maximum number of people allowed in a single room.
+const MAX_USERS = 6;
+
 // In-memory room store. Shape:
 // rooms[roomCode] = {
 //   videoId: string | null,
@@ -218,7 +221,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (room.users.size >= 2 && !room.users.has(socket.id)) {
+    if (room.users.size >= MAX_USERS && !room.users.has(socket.id)) {
       socket.emit('roomFull');
       if (typeof ack === 'function') ack({ ok: false, error: 'Room is full' });
       return;
@@ -273,48 +276,54 @@ io.on('connection', (socket) => {
   });
 
   // ---------------------------------------------------------------------------
-  // Live voice chat (WebRTC). The server is only a signaling relay: it forwards
-  // SDP offers/answers and ICE candidates between the two peers. Audio flows
-  // peer-to-peer, never through the server.
+  // Live voice chat (WebRTC mesh). The server is only a signaling relay: it
+  // forwards SDP offers/answers and ICE candidates between specific peers using
+  // their socket ids. Audio flows peer-to-peer, never through the server.
+  //
+  // Mesh model: every voice participant holds one RTCPeerConnection to every
+  // other participant. When someone joins voice, we send them the list of peers
+  // already in voice; the newcomer creates an offer to each of them.
   // ---------------------------------------------------------------------------
   socket.on('voice-join', () => {
     const room = getSocketRoom(socket);
     if (!room) return;
     room.voiceUsers = room.voiceUsers || new Set();
+
+    // Existing voice participants (before this socket is added).
+    const peers = [...room.voiceUsers].filter((id) => id !== socket.id);
     room.voiceUsers.add(socket.id);
 
-    // If the other user is already in voice, tell THIS (newly joined) socket to
-    // initiate the WebRTC offer, and let the peer know someone joined voice.
-    const others = [...room.voiceUsers].filter((id) => id !== socket.id);
-    if (others.length > 0) {
-      socket.emit('voice-initiate'); // newcomer creates the offer
+    // Tell the newcomer who's already in voice so it can offer to each of them.
+    socket.emit('voice-peers', { peers });
+
+    if (peers.length > 0) {
       socket.to(room.__code).emit('system', `${socket.data.name} joined voice`);
     }
   });
 
-  socket.on('voice-offer', ({ sdp } = {}) => {
-    const room = getSocketRoom(socket);
-    if (!room) return;
-    socket.to(room.__code).emit('voice-offer', { sdp });
+  // Forward an SDP offer to a specific peer, tagging who it came from.
+  socket.on('voice-offer', ({ to, sdp } = {}) => {
+    if (!to) return;
+    io.to(to).emit('voice-offer', { from: socket.id, sdp });
   });
 
-  socket.on('voice-answer', ({ sdp } = {}) => {
-    const room = getSocketRoom(socket);
-    if (!room) return;
-    socket.to(room.__code).emit('voice-answer', { sdp });
+  // Forward an SDP answer back to the specific peer.
+  socket.on('voice-answer', ({ to, sdp } = {}) => {
+    if (!to) return;
+    io.to(to).emit('voice-answer', { from: socket.id, sdp });
   });
 
-  socket.on('voice-ice', ({ candidate } = {}) => {
-    const room = getSocketRoom(socket);
-    if (!room) return;
-    socket.to(room.__code).emit('voice-ice', { candidate });
+  // Forward an ICE candidate to the specific peer.
+  socket.on('voice-ice', ({ to, candidate } = {}) => {
+    if (!to) return;
+    io.to(to).emit('voice-ice', { from: socket.id, candidate });
   });
 
   socket.on('voice-leave', () => {
     const room = getSocketRoom(socket);
     if (!room) return;
     if (room.voiceUsers) room.voiceUsers.delete(socket.id);
-    socket.to(room.__code).emit('voice-peer-left');
+    socket.to(room.__code).emit('voice-peer-left', { id: socket.id });
   });
 
   // ---------------------------------------------------------------------------
@@ -519,7 +528,7 @@ io.on('connection', (socket) => {
       // If the first user leaves, the remaining user keeps the room + state.
       io.to(roomCode).emit('userCount', room.users.size);
       io.to(roomCode).emit('peerLeft');
-      io.to(roomCode).emit('voice-peer-left');
+      io.to(roomCode).emit('voice-peer-left', { id: socket.id });
     }
   }
 

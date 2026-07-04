@@ -42,7 +42,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const chatEndRef = useRef(null);
 
   // Live voice chat (WebRTC) hook.
-  const { inVoice, muted, voiceStatus, startVoice, stopVoice, toggleMute } = useVoiceChat();
+  const { inVoice, muted, voiceStatus, peerCount, startVoice, stopVoice, toggleMute } = useVoiceChat();
 
   // Authoritative state mirror (server time based). Kept in a ref because the
   // drift-correction loop reads it frequently without needing re-renders.
@@ -351,7 +351,9 @@ export default function Room({ roomCode, initialState, onLeave }) {
 
   // Connection status text derived from user count.
   useEffect(() => {
-    setSyncStatus(userCount >= 2 ? 'Connected — 2 watching' : 'Waiting for second user…');
+    setSyncStatus(
+      userCount >= 2 ? `Connected — ${userCount} watching` : 'Waiting for others…'
+    );
   }, [userCount]);
 
   // Leave the room on unmount / tab close.
@@ -517,7 +519,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
         <button
           className={`btn tiny voice-btn ${inVoice ? 'on' : ''}`}
           onClick={handleVoiceToggle}
-          title="Talk / sing live with your partner"
+          title="Talk / sing live with everyone in the room"
         >
           {inVoice ? '🎙️ Live' : '🎤 Voice'}
         </button>
@@ -534,8 +536,8 @@ export default function Room({ roomCode, initialState, onLeave }) {
       {inVoice && (
         <div className={`voice-status ${voiceStatus}`}>
           {voiceStatus === 'connected'
-            ? '🎙️ Voice connected — you can talk or sing together'
-            : '🎙️ Voice on — waiting for your partner to join voice…'}
+            ? `🎙️ Voice connected — talking with ${peerCount} ${peerCount === 1 ? 'person' : 'people'}`
+            : '🎙️ Voice on — waiting for others to join voice…'}
         </div>
       )}
 
@@ -547,7 +549,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
           </div>
           <div className="chat-messages">
             {messages.length === 0 ? (
-              <div className="chat-empty">Say hi 👋 — messages are just between you two.</div>
+              <div className="chat-empty">Say hi 👋 — chat with everyone in the room.</div>
             ) : (
               messages.map((m) => (
                 <div key={m.id} className={`chat-msg ${m.mine ? 'mine' : 'theirs'}`}>
@@ -625,7 +627,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
       <div className="metrics">
         <div className="metric">
           <span className="metric-label">Users</span>
-          <span className="metric-value">{userCount} / 2</span>
+          <span className="metric-value">{userCount} / 6</span>
         </div>
         <div className="metric">
           <span className="metric-label">Sync</span>

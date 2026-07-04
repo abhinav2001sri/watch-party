@@ -16,7 +16,7 @@ export default function App() {
     // Begin estimating the client<->server clock offset as soon as we mount.
     startClockSync();
 
-    const onRoomFull = () => setBanner('Room is full — only two people can watch together.');
+    const onRoomFull = () => setBanner('Room is full — up to six people can watch together.');
     const onError = (msg) => setBanner(typeof msg === 'string' ? msg : 'Something went wrong.');
 
     socket.on('roomFull', onRoomFull);
