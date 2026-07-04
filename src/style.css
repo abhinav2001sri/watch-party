@@ -478,7 +478,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
    so you can chat over the video without scrolling down. */
 .chat-panel {
   position: fixed;
-  left: 20px;
+  right: 20px;
   bottom: 20px;
   z-index: 60;
   width: 340px;
