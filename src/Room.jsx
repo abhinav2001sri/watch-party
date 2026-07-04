@@ -477,6 +477,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
             {shared ? '✓ Link copied' : '🔗 Share'}
           </button>
         </div>
+        <div className="room-brand">🎬 Watch Party</div>
         <div className="room-status">
           <span className={`dot ${userCount >= 2 ? 'green' : 'amber'}`} />
           {syncStatus}

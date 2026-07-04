@@ -220,6 +220,20 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   flex-wrap: wrap;
 }
 .room-code { display: flex; align-items: center; gap: 10px; }
+.room-brand {
+  flex: 1;
+  text-align: center;
+  font-size: clamp(18px, 2.4vw, 26px);
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+  background: linear-gradient(135deg, #ff8a3d, #ff3d8b 40%, #7a5cff 70%, #38d6ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(255, 61, 139, 0.35));
+  pointer-events: none;
+}
 .room-code .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
 .room-code .code {
   font-size: 24px;
@@ -419,6 +433,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   .room-code { flex-wrap: wrap; width: 100%; }
   .room-code .code { font-size: 20px; letter-spacing: 2px; }
   .room-status { order: 3; font-size: 14px; }
+  .room-brand { display: none; }
 
   /* Keep the video pinned to the top while the queue scrolls beneath it. */
   .player-wrap {
