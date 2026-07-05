@@ -59,8 +59,12 @@ export default function Home({ onEnterRoom }) {
       <div className="hero">
         <h1>
           <svg className="brand-mic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" />
-            <path d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3.08A7 7 0 0 0 19 11z" />
+            <circle cx="7" cy="5.5" r="3.3" />
+            <circle cx="13" cy="5.5" r="3.3" />
+            <rect x="6.5" y="2.2" width="7" height="1.6" rx="0.8" />
+            <rect x="2" y="8.5" width="14" height="10" rx="1.6" />
+            <path d="M16 11.2 L22.5 8 L22.5 19 L16 15.8 Z" />
+            <path d="M6 18.5 L10 21 L4 21 Z" />
           </svg>
           JamAlong
         </h1>
