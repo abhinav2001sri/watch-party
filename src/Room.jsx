@@ -37,6 +37,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [queue, setQueue] = useState(initialState?.queue || []);
+  const [isPlaying, setIsPlaying] = useState(initialState?.isPlaying || false);
   const [activity, setActivity] = useState('');
   const [floaters, setFloaters] = useState([]); // { id, emoji, left }
   const [messages, setMessages] = useState([]); // { id, mine, name, text, time }
@@ -84,6 +85,9 @@ export default function Room({ roomCode, initialState, onLeave }) {
   // ---- Player event handlers -------------------------------------------------
   const handleStateChange = useCallback((e) => {
     const player = e.target;
+    // Keep the Play/Pause toggle label accurate for local *and* remote changes.
+    if (e.data === YT_PLAYING) setIsPlaying(true);
+    else if (e.data === YT_PAUSED) setIsPlaying(false);
     if (isApplyingRemoteUpdate.current) return; // Don't rebroadcast remote-driven changes.
 
     const time = player.getCurrentTime();
@@ -376,6 +380,12 @@ export default function Room({ roomCode, initialState, onLeave }) {
     const player = getPlayer();
     if (player) player.pauseVideo();
   }
+  function handlePlayPause() {
+    const player = getPlayer();
+    if (!player) return;
+    if (isPlaying) player.pauseVideo();
+    else player.playVideo();
+  }
   function handleSyncNow() {
     socket.emit('requestRoomState');
   }
@@ -542,13 +552,27 @@ export default function Room({ roomCode, initialState, onLeave }) {
         {activity && <div className="activity-toast">{activity}</div>}
       </div>
 
-      {/* Emoji reaction bar + voice & chat toggles. */}
+      {/* Playback controls + voice & chat toggles. */}
       <div className="reaction-bar">
-        {['❤️', '😂', '😮', '👍', '🔥', '🎉', '😢', '👀'].map((e) => (
-          <button key={e} className="reaction-btn" onClick={() => handleReact(e)}>
-            {e}
-          </button>
-        ))}
+        <button
+          className="btn"
+          onClick={handlePlayPause}
+          disabled={!isReady || !videoId}
+          title={isPlaying ? 'Pause for everyone' : 'Play for everyone'}
+        >
+          {isPlaying ? '⏸ Pause' : '▶ Play'}
+        </button>
+        <button
+          className="btn"
+          onClick={handleSkip}
+          disabled={queue.length === 0}
+          title="Play the next queued video"
+        >
+          ⏭ Next ({queue.length})
+        </button>
+        <button className="btn" onClick={handleSyncNow} disabled={!videoId} title="Re-sync with everyone">
+          ⟳ Sync Now
+        </button>
         <span className="reaction-spacer" />
         <button
           className={`btn tiny voice-btn ${inVoice ? 'on' : ''}`}
@@ -607,15 +631,6 @@ export default function Room({ roomCode, initialState, onLeave }) {
           </div>
         </div>
       )}
-
-      <div className="controls">
-        <button className="btn" onClick={handlePlay} disabled={!isReady || !videoId}>▶ Play</button>
-        <button className="btn" onClick={handlePause} disabled={!isReady || !videoId}>⏸ Pause</button>
-        <button className="btn" onClick={handleSyncNow} disabled={!videoId}>⟳ Sync Now</button>
-        <button className="btn" onClick={handleSkip} disabled={queue.length === 0} title="Play the next queued video">
-          ⏭ Next ({queue.length})
-        </button>
-      </div>
 
       <div className="change-video">
         <input
