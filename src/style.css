@@ -121,7 +121,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
 .home { width: 100%; max-width: 900px; }
 .hero { text-align: center; margin: 24px 0 32px; }
 .hero h1 {
-  font-size: clamp(48px, 9vw, 104px);
+  font-size: clamp(64px, 13vw, 160px);
   font-weight: 900;
   line-height: 1.02;
   margin: 0 0 12px;
@@ -419,6 +419,10 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   border-radius: var(--radius);
   padding: 8px;
   margin-bottom: 16px;
+}
+.play-pause-btn {
+  min-width: 108px;
+  text-align: center;
 }
 .reaction-btn {
   border: none;

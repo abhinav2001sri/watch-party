@@ -555,7 +555,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
       {/* Playback controls + voice & chat toggles. */}
       <div className="reaction-bar">
         <button
-          className="btn"
+          className="btn play-pause-btn"
           onClick={handlePlayPause}
           disabled={!isReady || !videoId}
           title={isPlaying ? 'Pause for everyone' : 'Play for everyone'}
