@@ -482,20 +482,22 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('changeVideo', ({ videoId } = {}) => {
+  socket.on('changeVideo', ({ videoId, play } = {}) => {
     const room = getSocketRoom(socket);
     if (!room || !videoId) return;
 
+    const autoplay = !!play;
     room.videoId = videoId;
-    room.isPlaying = false;
+    room.isPlaying = autoplay;
     room.currentTime = 0;
     room.lastUpdatedServerTime = Date.now();
 
     // Broadcast to everyone in the room (including sender) so all reset cleanly.
+    // autoplay:true  -> the video loads and starts playing immediately for all.
     // autoplay:false -> the video is cued (loaded, paused) so both start in sync.
     io.to(room.__code).emit('changeVideo', {
       videoId,
-      autoplay: false,
+      autoplay,
       serverTime: Date.now(),
     });
     socket.to(room.__code).emit('system', `${socket.data.name} changed the video`);

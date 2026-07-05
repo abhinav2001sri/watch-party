@@ -366,6 +366,23 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   background: rgba(0, 0, 0, 0.3);
 }
 .search-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.search-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  padding: 4px;
+  margin: -4px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+.search-pick:hover { background: rgba(255, 255, 255, 0.06); }
+.search-pick:hover .search-title { color: #c9b8ff; }
 .search-title {
   font-size: 14px;
   font-weight: 600;

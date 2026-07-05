@@ -486,7 +486,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
     const id = parseVideoId(changeVideoInput);
     if (!id) return;
     setChangeVideoInput('');
-    socket.emit('changeVideo', { videoId: id });
+    socket.emit('changeVideo', { videoId: id, play: true });
   }
   function handleAddToQueue() {
     // If the input is a playlist, add every video from it.
@@ -532,7 +532,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
     runSearch(searchQuery);
   }
   function handlePlayResult(id) {
-    socket.emit('changeVideo', { videoId: id });
+    socket.emit('changeVideo', { videoId: id, play: true });
     setSearchResults([]);
     setSearchQuery('');
     setSearchError('');
@@ -839,11 +839,18 @@ export default function Room({ roomCode, initialState, onLeave }) {
           <ul className="search-results">
             {searchResults.map((r) => (
               <li className="search-result" key={r.videoId}>
-                <img className="search-thumb" src={r.thumbnail} alt="" loading="lazy" />
-                <div className="search-meta">
-                  <span className="search-title">{r.title}</span>
-                  <span className="search-channel">{r.channel}</span>
-                </div>
+                <button
+                  type="button"
+                  className="search-pick"
+                  onClick={() => handlePlayResult(r.videoId)}
+                  title="Play this now"
+                >
+                  <img className="search-thumb" src={r.thumbnail} alt="" loading="lazy" />
+                  <div className="search-meta">
+                    <span className="search-title">{r.title}</span>
+                    <span className="search-channel">{r.channel}</span>
+                  </div>
+                </button>
                 <div className="search-actions">
                   <button className="btn tiny" onClick={() => handleQueueResult(r.videoId)}>
                     ＋ Queue
