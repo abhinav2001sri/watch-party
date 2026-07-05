@@ -54,6 +54,8 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const emojiWrapRef = useRef(null);
   const soundWrapRef = useRef(null);
   const searchSeqRef = useRef(0);
+  const searchInputRef = useRef(null);
+  const pasteInputRef = useRef(null);
 
   // Live voice chat (WebRTC) hook.
   const { inVoice, muted, voiceStatus, peerCount, startVoice, stopVoice, toggleMute } = useVoiceChat();
@@ -519,6 +521,12 @@ export default function Room({ roomCode, initialState, onLeave }) {
   function handleQueueResult(id) {
     socket.emit('addToQueue', { videoId: id });
   }
+  function focusInput(ref) {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.focus({ preventScroll: true });
+  }
   function handleSkip() {
     socket.emit('skipVideo');
   }
@@ -618,7 +626,11 @@ export default function Room({ roomCode, initialState, onLeave }) {
       <div className="player-wrap">
         {!videoId && (
           <div className="no-video">
-            No video loaded yet. Use <strong>Search</strong> or <strong>Play now</strong> below to start.
+            No video loaded yet. Use{' '}
+            <button type="button" className="no-video-link" onClick={() => focusInput(searchInputRef)}>Search</button>{' '}
+            or{' '}
+            <button type="button" className="no-video-link" onClick={() => focusInput(pasteInputRef)}>Play now</button>{' '}
+            below to start.
           </div>
         )}
         {/* The IFrame API replaces this div with the player iframe. */}
@@ -781,6 +793,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
             type="text"
             placeholder="🔎 Search YouTube for a song or video…"
             value={searchQuery}
+            ref={searchInputRef}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
@@ -821,6 +834,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
           type="text"
           placeholder="Paste a YouTube video or playlist URL / ID"
           value={changeVideoInput}
+          ref={pasteInputRef}
           onChange={(e) => setChangeVideoInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleChangeVideo()}
         />
