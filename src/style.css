@@ -157,6 +157,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   gap: 8px;
 }
 .card h2 { margin: 0 0 8px; font-size: 20px; }
+.card-hint { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
 .card .btn { margin-top: 12px; }
 
 .divider {
@@ -247,8 +248,13 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   letter-spacing: -0.5px;
   white-space: nowrap;
   color: #fff;
-  pointer-events: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.12s ease, filter 0.12s ease;
 }
+.room-brand:hover { transform: scale(1.05); filter: drop-shadow(0 2px 10px rgba(255, 255, 255, 0.35)); }
+.room-brand:active { transform: scale(0.98); }
 .room-brand .brand-mic {
   fill: #fff;
 }
@@ -456,18 +462,72 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
 .reaction-btn:active { transform: scale(0.95); }
 
 /* Floating emoji overlay on the player. */
-.floaters { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.floaters { position: fixed; inset: 0; pointer-events: none; overflow: visible; z-index: 60; }
 .floater {
   position: absolute;
-  bottom: 8%;
+  bottom: 4%;
   font-size: 40px;
-  animation: floatEmoji 2.2s ease-out forwards;
+  will-change: transform, opacity;
+  animation: floatEmoji 2.6s ease-out forwards;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
 }
 @keyframes floatEmoji {
-  0% { transform: translateY(0) scale(0.6); opacity: 0; }
-  15% { opacity: 1; transform: translateY(-10px) scale(1.1); }
-  100% { transform: translateY(-220px) scale(1); opacity: 0; }
+  0% { transform: translate(0, 0) scale(0.4); opacity: 0; }
+  12% { opacity: 1; transform: translate(calc(var(--drift, 0px) * 0.2), -30px) scale(1.15); }
+  100% { transform: translate(var(--drift, 0px), -78vh) scale(1); opacity: 0; }
 }
+
+/* Sound (volume) control popover. */
+.sound-wrap { position: relative; }
+.emoji-wrap { position: relative; }
+.sound-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.sound-popover input[type='range'] { width: 120px; accent-color: var(--accent); }
+.sound-mute { background: transparent; border: none; font-size: 20px; cursor: pointer; line-height: 1; }
+.sound-value { color: var(--muted); font-size: 13px; width: 26px; text-align: right; }
+
+/* Emoji reaction picker popover. */
+.emoji-toggle.on { background: var(--grad-accent) !important; border-color: transparent !important; color: #fff; }
+.emoji-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 10px;
+  width: 200px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.emoji-pick {
+  border: none;
+  background: transparent;
+  font-size: 26px;
+  line-height: 1;
+  padding: 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.emoji-pick:hover { background: rgba(122, 92, 255, 0.35); transform: scale(1.2); }
+.emoji-pick:active { transform: scale(0.9); }
 
 /* Activity toast (who paused/played/added). */
 .activity-toast {

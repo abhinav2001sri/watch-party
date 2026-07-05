@@ -5,10 +5,8 @@
 
 import React, { useState } from 'react';
 import { socket } from './socket.js';
-import { parseVideoId } from './utils.js';
 
 export default function Home({ onEnterRoom }) {
-  const [videoInput, setVideoInput] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [name, setName] = useState(() => localStorage.getItem('wp_name') || '');
   const [error, setError] = useState('');
@@ -21,14 +19,7 @@ export default function Home({ onEnterRoom }) {
 
   function handleCreate() {
     setError('');
-    // A video is optional at creation time; users can change it inside the room.
-    const videoId = parseVideoId(videoInput);
-    if (videoInput.trim() && !videoId) {
-      setError('That does not look like a valid YouTube URL or video ID.');
-      return;
-    }
-
-    socket.emit('createRoom', { videoId, name: name.trim() || 'Guest' }, (res) => {
+    socket.emit('createRoom', { videoId: null, name: name.trim() || 'Guest' }, (res) => {
       if (res && res.ok) {
         onEnterRoom(res.roomCode, res.state);
       } else {
@@ -84,17 +75,10 @@ export default function Home({ onEnterRoom }) {
 
       <div className="cards">
         <div className="card">
-          <h2>Create a room</h2>
-          <label htmlFor="video">YouTube URL or video ID (optional)</label>
-          <input
-            id="video"
-            type="text"
-            placeholder="https://youtu.be/dQw4w9WgXcQ"
-            value={videoInput}
-            onChange={(e) => setVideoInput(e.target.value)}
-          />
+          <h2>Create an instant room</h2>
+          <p className="card-hint">Start a fresh room now — add songs and invite friends once you're inside.</p>
           <button className="btn primary" onClick={handleCreate}>
-            Create room
+            Create instant room
           </button>
         </div>
 

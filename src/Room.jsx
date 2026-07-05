@@ -24,6 +24,9 @@ const YT_PLAYING = 1;
 const YT_PAUSED = 2;
 const YT_ENDED = 0;
 
+// Emojis available in the reaction picker.
+const EMOJIS = ['❤️', '😂', '🔥', '🎉', '👍', '😮', '😍', '🥳', '👏', '💯', '😢', '🙌', '🎶', '✨', '😎', '💃'];
+
 export default function Room({ roomCode, initialState, onLeave }) {
   const [videoId, setVideoId] = useState(initialState?.videoId || null);
   const [userCount, setUserCount] = useState(initialState?.userCount || 1);
@@ -44,7 +47,13 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [chatInput, setChatInput] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [soundOpen, setSoundOpen] = useState(false);
+  const [volume, setVolume] = useState(100);
   const chatEndRef = useRef(null);
+  const emojiWrapRef = useRef(null);
+  const soundWrapRef = useRef(null);
+  const searchSeqRef = useRef(0);
 
   // Live voice chat (WebRTC) hook.
   const { inVoice, muted, voiceStatus, peerCount, startVoice, stopVoice, toggleMute } = useVoiceChat();
@@ -214,14 +223,27 @@ export default function Room({ roomCode, initialState, onLeave }) {
     }, 1000);
   }, [getPlayer, withRemoteApply]);
 
-  // Spawn a floating emoji that drifts up and fades out.
+  // Spawn a big burst of floating emojis that flutter up and fade out.
   const spawnFloater = useCallback((emoji) => {
-    const id = Math.random().toString(36).slice(2);
-    const left = 10 + Math.random() * 80; // percent across the player
-    setFloaters((f) => [...f, { id, emoji, left }]);
+    const count = 16 + Math.floor(Math.random() * 8); // 16–23 emojis
+    const batch = [];
+    for (let i = 0; i < count; i++) {
+      batch.push({
+        id: Math.random().toString(36).slice(2),
+        emoji,
+        left: Math.random() * 92 + 2, // percent across the player
+        size: 44 + Math.random() * 66, // 44–110px, very big
+        drift: Math.random() * 120 - 60, // horizontal drift in px
+        delay: Math.random() * 0.5, // stagger start
+        duration: 2.2 + Math.random() * 1.6, // 2.2–3.8s
+      });
+    }
+    setFloaters((f) => [...f, ...batch]);
+    const maxLife = 4600;
+    const ids = batch.map((b) => b.id);
     window.setTimeout(() => {
-      setFloaters((f) => f.filter((x) => x.id !== id));
-    }, 2200);
+      setFloaters((f) => f.filter((x) => !ids.includes(x.id)));
+    }, maxLife);
   }, []);
 
   // ---- Socket wiring ---------------------------------------------------------
@@ -283,6 +305,36 @@ export default function Room({ roomCode, initialState, onLeave }) {
   useEffect(() => {
     if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, chatOpen]);
+
+  // Close the emoji / sound popovers when clicking anywhere outside them.
+  useEffect(() => {
+    if (!emojiOpen && !soundOpen) return;
+    function onDocClick(e) {
+      if (emojiOpen && emojiWrapRef.current && !emojiWrapRef.current.contains(e.target)) {
+        setEmojiOpen(false);
+      }
+      if (soundOpen && soundWrapRef.current && !soundWrapRef.current.contains(e.target)) {
+        setSoundOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [emojiOpen, soundOpen]);
+
+  // Live search suggestions: debounce typing so results appear as you type.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      searchSeqRef.current++; // cancel any in-flight search
+      setSearchResults([]);
+      setSearchError('');
+      setSearching(false);
+      return;
+    }
+    const t = window.setTimeout(() => runSearch(q), 450);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   // ---- Local seek detection + drift correction loop --------------------------
   useEffect(() => {
@@ -389,6 +441,19 @@ export default function Room({ roomCode, initialState, onLeave }) {
   function handleSyncNow() {
     socket.emit('requestRoomState');
   }
+  function applyVolume(v) {
+    const vol = Math.max(0, Math.min(100, Math.round(v)));
+    setVolume(vol);
+    const player = getPlayer();
+    if (player) {
+      player.setVolume(vol);
+      if (vol === 0) player.mute();
+      else player.unMute();
+    }
+  }
+  function handleToggleMute() {
+    applyVolume(volume === 0 ? 70 : 0);
+  }
   function handleChangeVideo() {
     // A pasted playlist link takes priority: expand it into the queue and play.
     const list = parsePlaylistId(changeVideoInput);
@@ -415,12 +480,19 @@ export default function Room({ roomCode, initialState, onLeave }) {
     setChangeVideoInput('');
     socket.emit('addToQueue', { videoId: id });
   }
-  function handleSearch() {
-    const q = searchQuery.trim();
-    if (!q) return;
+  function runSearch(rawQuery) {
+    const q = (rawQuery || '').trim();
+    if (!q) {
+      setSearchResults([]);
+      setSearchError('');
+      setSearching(false);
+      return;
+    }
+    const seq = ++searchSeqRef.current;
     setSearching(true);
     setSearchError('');
     socket.emit('searchVideos', { query: q }, (res) => {
+      if (seq !== searchSeqRef.current) return; // a newer search superseded this one
       setSearching(false);
       if (!res || !res.ok) {
         setSearchResults([]);
@@ -432,8 +504,11 @@ export default function Room({ roomCode, initialState, onLeave }) {
         return;
       }
       setSearchResults(res.results || []);
-      if ((res.results || []).length === 0) setSearchError('No results. Try different words.');
+      setSearchError((res.results || []).length === 0 ? 'No results. Try different words.' : '');
     });
+  }
+  function handleSearch() {
+    runSearch(searchQuery);
   }
   function handlePlayResult(id) {
     socket.emit('changeVideo', { videoId: id });
@@ -520,7 +595,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
             {shared ? '✓ Link copied' : '🔗 Share'}
           </button>
         </div>
-        <div className="room-brand">
+        <button className="room-brand" onClick={handleLeaveClick} title="Back to home">
           <svg className="brand-mic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="7" cy="5.5" r="3.3" />
             <circle cx="13" cy="5.5" r="3.3" />
@@ -530,7 +605,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
             <path d="M6 18.5 L10 21 L4 21 Z" />
           </svg>
           JamAlong
-        </div>
+        </button>
         <div className="room-status">
           <span className={`dot ${userCount >= 2 ? 'green' : 'amber'}`} />
           {syncStatus}
@@ -552,7 +627,17 @@ export default function Room({ roomCode, initialState, onLeave }) {
         {/* Floating emoji reactions overlay. */}
         <div className="floaters">
           {floaters.map((f) => (
-            <span key={f.id} className="floater" style={{ left: `${f.left}%` }}>
+            <span
+              key={f.id}
+              className="floater"
+              style={{
+                left: `${f.left}%`,
+                fontSize: `${f.size}px`,
+                animationDelay: `${f.delay}s`,
+                animationDuration: `${f.duration}s`,
+                '--drift': `${f.drift}px`,
+              }}
+            >
               {f.emoji}
             </span>
           ))}
@@ -580,6 +665,31 @@ export default function Room({ roomCode, initialState, onLeave }) {
         >
           ⏭ Next ({queue.length})
         </button>
+        <div className="sound-wrap" ref={soundWrapRef}>
+          <button
+            className="btn"
+            onClick={() => setSoundOpen((o) => !o)}
+            title="Adjust volume"
+          >
+            {volume === 0 ? '🔇' : volume < 50 ? '🔉' : '🔊'} Sound
+          </button>
+          {soundOpen && (
+            <div className="sound-popover">
+              <button className="sound-mute" onClick={handleToggleMute} title={volume === 0 ? 'Unmute' : 'Mute'}>
+                {volume === 0 ? '🔇' : volume < 50 ? '🔉' : '🔊'}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={(e) => applyVolume(Number(e.target.value))}
+                aria-label="Volume"
+              />
+              <span className="sound-value">{volume}</span>
+            </div>
+          )}
+        </div>
         <button className="btn" onClick={handleSyncNow} disabled={!videoId} title="Re-sync with everyone">
           ⟳ Sync Now
         </button>
@@ -599,6 +709,29 @@ export default function Room({ roomCode, initialState, onLeave }) {
         <button className="btn tiny chat-toggle" onClick={toggleChat}>
           💬 Chat{unread > 0 ? ` (${unread})` : ''}
         </button>
+        <div className="emoji-wrap" ref={emojiWrapRef}>
+          <button
+            className={`btn tiny emoji-toggle ${emojiOpen ? 'on' : ''}`}
+            onClick={() => setEmojiOpen((o) => !o)}
+            title="Send emoji reactions"
+          >
+            😀 Emoji
+          </button>
+          {emojiOpen && (
+            <div className="emoji-popover">
+              {EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  className="emoji-pick"
+                  onClick={() => handleReact(e)}
+                  title={`Send ${e}`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {inVoice && (
@@ -642,18 +775,6 @@ export default function Room({ roomCode, initialState, onLeave }) {
         </div>
       )}
 
-      <div className="change-video">
-        <input
-          type="text"
-          placeholder="Paste a YouTube video or playlist URL / ID"
-          value={changeVideoInput}
-          onChange={(e) => setChangeVideoInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleChangeVideo()}
-        />
-        <button className="btn" onClick={handleAddToQueue}>＋ Add to queue</button>
-        <button className="btn primary" onClick={handleChangeVideo}>Play now</button>
-      </div>
-
       <div className="search-box">
         <div className="search-row">
           <input
@@ -693,6 +814,18 @@ export default function Room({ roomCode, initialState, onLeave }) {
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="change-video">
+        <input
+          type="text"
+          placeholder="Paste a YouTube video or playlist URL / ID"
+          value={changeVideoInput}
+          onChange={(e) => setChangeVideoInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleChangeVideo()}
+        />
+        <button className="btn" onClick={handleAddToQueue}>＋ Add to queue</button>
+        <button className="btn primary" onClick={handleChangeVideo}>Play now</button>
       </div>
 
       <div className="queue">
