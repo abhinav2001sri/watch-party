@@ -126,11 +126,15 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   line-height: 1.02;
   margin: 0 0 12px;
   letter-spacing: -1.5px;
-  background: linear-gradient(135deg, #ff8a3d, #ff3d8b 40%, #7a5cff 70%, #38d6ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 4px 18px rgba(255, 61, 139, 0.4));
+  white-space: nowrap;
+  color: #7a5cff;
+  filter: drop-shadow(0 4px 18px rgba(122, 92, 255, 0.4));
+}
+.brand-mic {
+  width: 0.8em;
+  height: 0.8em;
+  vertical-align: -0.06em;
+  margin-right: 0.06em;
 }
 .subtitle { color: #2a1b4a; font-size: 17px; font-weight: 600; margin: 0; }
 
