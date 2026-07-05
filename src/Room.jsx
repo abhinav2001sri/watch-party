@@ -520,7 +520,17 @@ export default function Room({ roomCode, initialState, onLeave }) {
             {shared ? '✓ Link copied' : '🔗 Share'}
           </button>
         </div>
-        <div className="room-brand">🎤 JamAlong</div>
+        <div className="room-brand">
+          <svg className="brand-mic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="7" cy="5.5" r="3.3" />
+            <circle cx="13" cy="5.5" r="3.3" />
+            <rect x="6.5" y="2.2" width="7" height="1.6" rx="0.8" />
+            <rect x="2" y="8.5" width="14" height="10" rx="1.6" />
+            <path d="M16 11.2 L22.5 8 L22.5 19 L16 15.8 Z" />
+            <path d="M6 18.5 L10 21 L4 21 Z" />
+          </svg>
+          JamAlong
+        </div>
         <div className="room-status">
           <span className={`dot ${userCount >= 2 ? 'green' : 'amber'}`} />
           {syncStatus}
