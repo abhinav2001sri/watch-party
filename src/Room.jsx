@@ -662,28 +662,31 @@ export default function Room({ roomCode, initialState, onLeave }) {
       {/* Playback controls + voice & chat toggles. */}
       <div className="reaction-bar">
         <button
-          className="btn play-pause-btn"
+          className="btn icon-btn play-pause-btn"
           onClick={handlePlayPause}
           disabled={!isReady || !videoId}
           title={isPlaying ? 'Pause for everyone' : 'Play for everyone'}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
         >
-          {isPlaying ? '⏸ Pause' : '▶ Play'}
+          {isPlaying ? '⏸' : '▶'}
         </button>
         <button
-          className="btn"
+          className="btn icon-btn"
           onClick={handleSkip}
           disabled={queue.length === 0}
-          title="Play the next queued video"
+          title={`Play the next queued video (${queue.length} in queue)`}
+          aria-label="Next"
         >
-          ⏭ Next ({queue.length})
+          ⏭{queue.length > 0 && <sup className="btn-badge">{queue.length}</sup>}
         </button>
         <div className="sound-wrap" ref={soundWrapRef}>
           <button
-            className="btn"
+            className="btn icon-btn"
             onClick={() => setSoundOpen((o) => !o)}
-            title="Adjust volume"
+            title="Sound / volume"
+            aria-label="Sound"
           >
-            {volume === 0 ? '🔇' : volume < 50 ? '🔉' : '🔊'} Sound
+            {volume === 0 ? '🔇' : volume < 50 ? '🔉' : '🔊'}
           </button>
           {soundOpen && (
             <div className="sound-popover">
@@ -702,32 +705,39 @@ export default function Room({ roomCode, initialState, onLeave }) {
             </div>
           )}
         </div>
-        <button className="btn" onClick={handleSyncNow} disabled={!videoId} title="Re-sync with everyone">
-          ⟳ Sync Now
+        <button className="btn icon-btn" onClick={handleSyncNow} disabled={!videoId} title="Re-sync with everyone" aria-label="Sync now">
+          ⟳
         </button>
         <span className="reaction-spacer" />
         <button
-          className={`btn tiny voice-btn ${inVoice ? 'on' : ''}`}
+          className={`btn tiny icon-btn voice-btn ${inVoice ? 'on' : ''}`}
           onClick={handleVoiceToggle}
-          title="Talk / sing live with everyone in the room"
+          title={inVoice ? 'Live — click to leave voice' : 'Talk / sing live with everyone'}
+          aria-label={inVoice ? 'Leave voice' : 'Join voice'}
         >
-          {inVoice ? '🎙️ Live' : '🎤 Voice'}
+          {inVoice ? '🎙️' : '🎤'}
         </button>
         {inVoice && (
-          <button className={`btn tiny ${muted ? 'primary' : ''}`} onClick={toggleMute}>
-            {muted ? '🔇 Unmute' : '🔊 Mute'}
+          <button
+            className={`btn tiny icon-btn ${muted ? 'primary' : ''}`}
+            onClick={toggleMute}
+            title={muted ? 'Unmute your mic' : 'Mute your mic'}
+            aria-label={muted ? 'Unmute mic' : 'Mute mic'}
+          >
+            {muted ? '🔇' : '🔊'}
           </button>
         )}
-        <button className="btn tiny chat-toggle" onClick={toggleChat}>
-          💬 Chat{unread > 0 ? ` (${unread})` : ''}
+        <button className="btn tiny icon-btn chat-toggle" onClick={toggleChat} title="Chat" aria-label="Chat">
+          💬{unread > 0 && <sup className="btn-badge">{unread}</sup>}
         </button>
         <div className="emoji-wrap" ref={emojiWrapRef}>
           <button
-            className={`btn tiny emoji-toggle ${emojiOpen ? 'on' : ''}`}
+            className={`btn tiny icon-btn emoji-toggle ${emojiOpen ? 'on' : ''}`}
             onClick={() => setEmojiOpen((o) => !o)}
             title="Send emoji reactions"
+            aria-label="Emoji reactions"
           >
-            😀 Emoji
+            😀
           </button>
           {emojiOpen && (
             <div className="emoji-popover">
