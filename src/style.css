@@ -115,6 +115,7 @@ input[type='text'] {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 input[type='text']:focus { border-color: var(--accent); box-shadow: 0 0 12px rgba(56, 214, 255, 0.4); }
+input[type='text']::placeholder { color: #e6ddff; opacity: 0.85; }
 label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px; }
 
 /* ---------- Home ---------- */
