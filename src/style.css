@@ -204,9 +204,9 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   z-index: 1000;
   width: calc(100% - 32px);
   max-width: 440px;
-  background: rgba(251, 191, 36, 0.16);
-  border: 1px solid rgba(251, 191, 36, 0.5);
-  color: #ffe6a8;
+  background: rgba(251, 191, 36, 0.95);
+  border: 1px solid rgba(251, 191, 36, 0.9);
+  color: #111;
   padding: 12px 16px;
   border-radius: 10px;
   text-align: center;
@@ -245,17 +245,11 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   font-weight: 900;
   letter-spacing: -0.5px;
   white-space: nowrap;
-  color: #111;
-  -webkit-text-stroke: 0.6px #fff;
-  paint-order: stroke fill;
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.6);
+  color: #fff;
   pointer-events: none;
 }
 .room-brand .brand-mic {
-  stroke: #fff;
-  stroke-width: 1.1;
-  paint-order: stroke;
-  overflow: visible;
+  fill: #fff;
 }
 .room-code .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
 .room-code .code {
