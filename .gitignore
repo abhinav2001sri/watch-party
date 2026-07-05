@@ -3,3 +3,9 @@ dist/
 *.log
 .DS_Store
 .env
+
+# Temp files from headless screenshot/preview verification
+pv_*.txt
+preview_*.txt
+hs.png
+home_shot.png
