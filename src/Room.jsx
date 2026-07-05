@@ -216,9 +216,28 @@ export default function Room({ roomCode, initialState, onLeave }) {
     if (!player || !state.videoId) return;
 
     withRemoteApply(() => {
+      // Make sure the correct video is actually loaded in the player. A client
+      // that joined late or missed a `changeVideo` event would otherwise try to
+      // seek/play a player that has no video, leaving a black screen.
+      let loadedId = null;
+      try {
+        const url = player.getVideoUrl && player.getVideoUrl();
+        const m = url && url.match(/[?&]v=([^&]+)/);
+        loadedId = m ? m[1] : null;
+      } catch (e) {
+        loadedId = null;
+      }
+
       const target = state.isPlaying
         ? state.currentTime + (serverNow() - state.lastUpdatedServerTime) / 1000
         : state.currentTime;
+
+      if (loadedId !== state.videoId) {
+        if (state.isPlaying) player.loadVideoById(state.videoId, target);
+        else player.cueVideoById(state.videoId, target);
+        return;
+      }
+
       player.seekTo(target, true);
       if (state.isPlaying) player.playVideo();
       else player.pauseVideo();

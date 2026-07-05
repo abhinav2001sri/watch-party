@@ -40,8 +40,13 @@ export function useYouTubePlayer({ elementId, videoId, onStateChange, onReady })
     whenYouTubeReady().then((YT) => {
       if (cancelled) return;
 
-      playerRef.current = new YT.Player(elementId, {
-        videoId: videoId || undefined,
+      // Build the config. IMPORTANT: only include `videoId` when we actually
+      // have one. Passing `videoId: undefined` (or an empty string) makes the
+      // IFrame API throw "Invalid video id" and the player never fires its
+      // `onReady` event, leaving it permanently unusable. Rooms that start
+      // empty (instant rooms) must therefore omit the key entirely and load
+      // the first video imperatively via cueVideoById/loadVideoById later.
+      const config = {
         playerVars: {
           // Show native controls; allow the app's custom buttons too.
           controls: 1,
@@ -59,7 +64,10 @@ export function useYouTubePlayer({ elementId, videoId, onStateChange, onReady })
             if (onStateChangeRef.current) onStateChangeRef.current(e);
           },
         },
-      });
+      };
+      if (videoId) config.videoId = videoId;
+
+      playerRef.current = new YT.Player(elementId, config);
     });
 
     return () => {
