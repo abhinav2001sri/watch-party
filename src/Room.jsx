@@ -647,7 +647,6 @@ export default function Room({ roomCode, initialState, onLeave }) {
           <div className="no-video">
             No video loaded yet. Use{' '}
             <button type="button" className="no-video-link" onClick={() => focusInput(searchInputRef)}>Search</button>{' '}
-            or{' '}
             <button type="button" className="no-video-link" onClick={() => focusInput(pasteInputRef)}>Play now</button>{' '}
             below to start.
           </div>
