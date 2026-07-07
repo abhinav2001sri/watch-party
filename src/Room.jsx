@@ -750,7 +750,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
             {muted ? '🔇' : '🔊'}
           </button>
         )}
-        <button className="btn tiny icon-btn chat-toggle" onClick={toggleChat} title="Chat" aria-label="Chat">
+        <button className={`btn tiny icon-btn chat-toggle${unread > 0 ? ' has-unread' : ''}`} onClick={toggleChat} title="Chat" aria-label="Chat">
           💬{unread > 0 && <sup className="btn-badge">{unread}</sup>}
         </button>
         <div className="emoji-wrap" ref={emojiWrapRef}>

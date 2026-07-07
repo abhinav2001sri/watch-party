@@ -706,6 +706,13 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   from { opacity: 0; transform: translateY(12px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+@keyframes chatBlink {
+  0%, 100% { background: transparent; border-color: var(--border); box-shadow: none; }
+  50% { background: var(--grad-primary); border-color: transparent; box-shadow: 0 0 12px rgba(255, 61, 139, 0.7); }
+}
+.chat-toggle.has-unread {
+  animation: chatBlink 1s ease-in-out infinite;
+}
 .chat-panel-header {
   display: flex;
   align-items: center;
