@@ -51,6 +51,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [soundOpen, setSoundOpen] = useState(false);
   const [volume, setVolume] = useState(100);
   const chatEndRef = useRef(null);
+  const chatInputRef = useRef(null);
   const emojiWrapRef = useRef(null);
   const soundWrapRef = useRef(null);
   const searchSeqRef = useRef(0);
@@ -569,7 +570,11 @@ export default function Room({ roomCode, initialState, onLeave }) {
   }
   function toggleChat() {
     setChatOpen((o) => {
-      if (!o) setUnread(0);
+      if (!o) {
+        setUnread(0);
+        // Auto-focus the chat input after the panel renders
+        window.setTimeout(() => chatInputRef.current?.focus(), 50);
+      }
       return !o;
     });
   }
@@ -618,7 +623,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
           <button className="btn tiny" onClick={handleCopy}>
             {copied ? '✓' : 'Copy'}
           </button>
-          <button className="btn tiny primary" onClick={handleShare}>
+          <button className="btn tiny" onClick={handleShare}>
             {shared ? '✓ Link copied' : '🔗 Share'}
           </button>
         </div>
@@ -807,6 +812,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
               placeholder="Type a message…"
               value={chatInput}
               maxLength={500}
+              ref={chatInputRef}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
             />
