@@ -47,6 +47,8 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [chatInput, setChatInput] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [chatBlink, setChatBlink] = useState(false);
+  const chatBlinkTimerRef = useRef(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [soundOpen, setSoundOpen] = useState(false);
   const [volume, setVolume] = useState(100);
@@ -298,6 +300,11 @@ export default function Room({ roomCode, initialState, onLeave }) {
     socket.on('chat', ({ name, text, time }) => {
       setMessages((m) => [...m, { id: Math.random().toString(36).slice(2), mine: false, name, text, time }]);
       setUnread((u) => (chatOpen ? 0 : u + 1));
+      if (!chatOpen) {
+        setChatBlink(true);
+        if (chatBlinkTimerRef.current) clearTimeout(chatBlinkTimerRef.current);
+        chatBlinkTimerRef.current = window.setTimeout(() => setChatBlink(false), 5000);
+      }
     });
     socket.on('peerLeft', () => setSyncStatus('Peer left — waiting for someone…'));
 
@@ -572,7 +579,8 @@ export default function Room({ roomCode, initialState, onLeave }) {
     setChatOpen((o) => {
       if (!o) {
         setUnread(0);
-        // Auto-focus the chat input after the panel renders
+        setChatBlink(false);
+        if (chatBlinkTimerRef.current) clearTimeout(chatBlinkTimerRef.current);
         window.setTimeout(() => chatInputRef.current?.focus(), 50);
       }
       return !o;
@@ -750,7 +758,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
             {muted ? '🔇' : '🔊'}
           </button>
         )}
-        <button className={`btn tiny icon-btn chat-toggle${unread > 0 ? ' has-unread' : ''}`} onClick={toggleChat} title="Chat" aria-label="Chat">
+        <button className={`btn tiny icon-btn chat-toggle${chatBlink ? ' blink-chat' : ''}${unread > 0 ? ' has-unread' : ''}`} onClick={toggleChat} title="Chat" aria-label="Chat">
           💬{unread > 0 && <sup className="btn-badge">{unread}</sup>}
         </button>
         <div className="emoji-wrap" ref={emojiWrapRef}>

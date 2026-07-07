@@ -710,8 +710,13 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   0%, 100% { background: transparent; border-color: var(--border); box-shadow: none; }
   50% { background: var(--grad-primary); border-color: transparent; box-shadow: 0 0 12px rgba(255, 61, 139, 0.7); }
 }
+.chat-toggle.blink-chat {
+  animation: chatBlink 1s ease-in-out 5;
+}
+/* After blinking stops, the unread badge alone signals there are messages */
 .chat-toggle.has-unread {
-  animation: chatBlink 1s ease-in-out infinite;
+  border-color: var(--primary);
+  box-shadow: 0 0 6px rgba(255, 61, 139, 0.35);
 }
 .chat-panel-header {
   display: flex;
