@@ -52,8 +52,6 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [soundOpen, setSoundOpen] = useState(false);
   const [volume, setVolume] = useState(100);
-  const [isPiP, setIsPiP] = useState(false);
-  const pipWindowRef = useRef(null);
   const chatEndRef = useRef(null);
   const chatInputRef = useRef(null);
   const emojiWrapRef = useRef(null);
@@ -485,59 +483,6 @@ export default function Room({ roomCode, initialState, onLeave }) {
   function handleToggleMute() {
     applyVolume(volume === 0 ? 70 : 0);
   }
-  async function handlePiP() {
-    // Exit PiP if already active
-    if (isPiP) {
-      pipWindowRef.current?.close();
-      return;
-    }
-
-    const playerEl = document.getElementById('yt-player');
-    if (!playerEl) return;
-
-    // Document Picture-in-Picture API — Chrome 116+, Android Chrome
-    if ('documentPictureInPicture' in window) {
-      try {
-        const pipWin = await window.documentPictureInPicture.requestWindow({
-          width: 480,
-          height: 270,
-          disallowReturnToOpener: false,
-        });
-        pipWindowRef.current = pipWin;
-
-        // Style the floating PiP window
-        const style = pipWin.document.createElement('style');
-        style.textContent = `
-          html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-          #yt-player { width: 100% !important; height: 100% !important; display: block; }
-        `;
-        pipWin.document.head.appendChild(style);
-
-        pipWin.document.body.appendChild(playerEl);
-        setIsPiP(true);
-
-        // When PiP window closes, move the player back
-        pipWin.addEventListener('pagehide', () => {
-          const playerWrap = document.querySelector('.player-wrap');
-          const floaters = playerWrap?.querySelector('.floaters');
-          if (playerWrap) {
-            playerEl.style.width = '';
-            playerEl.style.height = '';
-            playerWrap.insertBefore(playerEl, floaters || null);
-          }
-          setIsPiP(false);
-          pipWindowRef.current = null;
-        });
-      } catch (err) {
-        setActivity('Could not open Picture-in-Picture — try the ⊡ button inside the player.');
-        window.setTimeout(() => setActivity(''), 4000);
-      }
-    } else {
-      // Fallback: instruct user to use YouTube's native PiP button
-      setActivity('Tap the ⊡ icon inside the video player to enable Picture-in-Picture.');
-      window.setTimeout(() => setActivity(''), 5000);
-    }
-  }
   function handleChangeVideo() {
     // A pasted playlist link takes priority: expand it into the queue and play.
     const list = parsePlaylistId(changeVideoInput);
@@ -722,17 +667,6 @@ export default function Room({ roomCode, initialState, onLeave }) {
         {/* The IFrame API replaces this div with the player iframe. */}
         <div id="yt-player" />
 
-        {/* PiP active overlay — shown while player is in PiP window */}
-        {isPiP && (
-          <div className="pip-overlay">
-            <div className="pip-icon">⧉</div>
-            <p>Playing in Picture-in-Picture</p>
-            <button className="btn tiny" onClick={() => pipWindowRef.current?.close()}>
-              Return to page
-            </button>
-          </div>
-        )}
-
         {/* Floating emoji reactions overlay. */}
         <div className="floaters">
           {floaters.map((f) => (
@@ -804,15 +738,6 @@ export default function Room({ roomCode, initialState, onLeave }) {
         </div>
         <button className="btn icon-btn" onClick={handleSyncNow} disabled={!videoId} title="Re-sync with everyone" aria-label="Sync now">
           ⟳
-        </button>
-        <button
-          className={`btn icon-btn${isPiP ? ' on' : ''}`}
-          onClick={handlePiP}
-          disabled={!videoId}
-          title={isPiP ? 'Exit Picture-in-Picture' : 'Float video — watch while using other apps'}
-          aria-label={isPiP ? 'Exit PiP' : 'Picture-in-Picture'}
-        >
-          ⧉
         </button>
         <span className="reaction-spacer" />
         <button
