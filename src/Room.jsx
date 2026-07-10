@@ -27,6 +27,20 @@ const YT_ENDED = 0;
 // Emojis available in the reaction picker.
 const EMOJIS = ['❤️', '😂', '🔥', '🎉', '👍', '😮', '😍', '🥳', '👏', '💯', '😢', '🙌', '🎶', '✨', '😎', '💃'];
 
+// Small component that attaches a MediaStream to a <video> element via a ref.
+function VideoTile({ stream, label, muted: isMuted = false, className = '' }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current) ref.current.srcObject = stream || null;
+  }, [stream]);
+  return (
+    <div className={`video-tile ${className}`}>
+      <video ref={ref} autoPlay playsInline muted={isMuted} />
+      {label && <span className="video-tile-label">{label}</span>}
+    </div>
+  );
+}
+
 export default function Room({ roomCode, initialState, onLeave }) {
   const [videoId, setVideoId] = useState(initialState?.videoId || null);
   const [userCount, setUserCount] = useState(initialState?.userCount || 1);
@@ -61,7 +75,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const pasteInputRef = useRef(null);
 
   // Live voice chat (WebRTC) hook.
-  const { inVoice, muted, voiceStatus, peerCount, startVoice, stopVoice, toggleMute } = useVoiceChat();
+  const { inVoice, muted, voiceStatus, peerCount, videoEnabled, localVideoStream, remoteStreams, startVoice, stopVoice, toggleMute, toggleCamera } = useVoiceChat();
 
   // Authoritative state mirror (server time based). Kept in a ref because the
   // drift-correction loop reads it frequently without needing re-renders.
@@ -688,6 +702,18 @@ export default function Room({ roomCode, initialState, onLeave }) {
 
         {/* Activity line (who did what). */}
         {activity && <div className="activity-toast">{activity}</div>}
+
+        {/* Video call grid — shown when anyone has their camera on. */}
+        {inVoice && (videoEnabled || Object.keys(remoteStreams).length > 0) && (
+          <div className="video-call-grid">
+            {videoEnabled && (
+              <VideoTile stream={localVideoStream} label="You" muted className="video-tile-local" />
+            )}
+            {Object.entries(remoteStreams).map(([peerId, stream]) => (
+              <VideoTile key={peerId} stream={stream} label="Guest" />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Playback controls + voice & chat toggles. */}
@@ -756,6 +782,16 @@ export default function Room({ roomCode, initialState, onLeave }) {
             aria-label={muted ? 'Unmute mic' : 'Mute mic'}
           >
             {muted ? '🔇' : '🔊'}
+          </button>
+        )}
+        {inVoice && (
+          <button
+            className={`btn tiny icon-btn ${videoEnabled ? 'on' : ''}`}
+            onClick={toggleCamera}
+            title={videoEnabled ? 'Turn off camera' : 'Turn on camera'}
+            aria-label={videoEnabled ? 'Camera off' : 'Camera on'}
+          >
+            {videoEnabled ? '📹' : '📷'}
           </button>
         )}
         <button className={`btn tiny icon-btn chat-toggle${chatBlink ? ' blink-chat' : ''}${unread > 0 ? ' has-unread' : ''}`} onClick={toggleChat} title="Chat" aria-label="Chat">
