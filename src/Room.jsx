@@ -575,9 +575,11 @@ export default function Room({ roomCode, initialState, onLeave }) {
       if (!res || !res.ok) {
         setSearchResults([]);
         setSearchError(
-          res && res.reason === 'no-key'
-            ? 'Search needs a YouTube API key on the server. Pasting links and playlists still works.'
-            : 'Search failed — please try again in a moment.'
+          !res || res.reason === 'no-key'
+            ? 'Search needs a YouTube API key — paste a YouTube link directly instead.'
+            : res.reason === 'quota'
+            ? 'YouTube search quota used up for today. Paste a YouTube link or URL directly instead.'
+            : 'Search failed — paste a YouTube link directly instead.'
         );
         return;
       }

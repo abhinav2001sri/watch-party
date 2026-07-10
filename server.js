@@ -229,7 +229,9 @@ async function searchYouTube(query, max = 10) {
     const r = await fetch(url);
     if (!r.ok) {
       const detail = await r.text();
-      return { ok: false, reason: 'api-error', detail, results: [] };
+      // 403 with quotaExceeded means the daily 10k-unit free quota is used up.
+      const isQuota = r.status === 403 && detail.includes('quotaExceeded');
+      return { ok: false, reason: isQuota ? 'quota' : 'api-error', detail, results: [] };
     }
     const data = await r.json();
     const results = [];
