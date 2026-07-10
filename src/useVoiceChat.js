@@ -1,23 +1,12 @@
-// -----------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------
 // useVoiceChat - group WebRTC audio+video (full mesh) for everyone in a room.
 //
-// The server (see server.js) is only a signaling relay: it forwards SDP
-// offers/answers and ICE candidates between specific peers by socket id. Actual
-// audio/video flows peer-to-peer. Each participant holds one RTCPeerConnection
-// to every other participant.
-//
-// Flow:
-//   * User clicks the mic button -> getUserMedia(audio) -> emit 'voice-join'.
-//   * Server replies 'voice-peers' with the ids already in voice; we create an
-//     offer to each of them ('voice-offer' {to}).
-//   * Each existing peer receives 'voice-offer' {from}, answers it, and audio
-//     connects. ICE candidates are exchanged per-peer via 'voice-ice' {to}.
-//   * 'voice-peer-left' {id} tears down just that one peer connection.
-//   * Camera toggle: adds/removes a video track mid-call; onnegotiationneeded
-//     fires automatically and renegotiates with each peer.
-//
-// Note: public STUN servers handle most home networks. Very strict/symmetric
-// NATs may require a TURN server (not included) — documented in the README.
+// Design:
+//   * Joining the call (startVoice) only enters the signaling mesh — no media.
+//   * Audio and camera are independent toggles, both off by default.
+//   * setPeerMuted(id, bool) locally mutes/unmutes a remote peer's audio.
+//   * voicePeerIds tracks everyone currently in the call (even audio-only).
+//   * Camera toggle mid-call triggers onnegotiationneeded renegotiation.
 // -----------------------------------------------------------------------------
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -30,19 +19,19 @@ const ICE_SERVERS = [
 
 export function useVoiceChat() {
   const [inVoice, setInVoice] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const [videoEnabled, setVideoEnabled] = useState(false);
   const [localVideoStream, setLocalVideoStream] = useState(null);
-  const [remoteStreams, setRemoteStreams] = useState({}); // peerId -> MediaStream
-  const [voiceStatus, setVoiceStatus] = useState('off'); // off | connecting | connected
-  const [peerCount, setPeerCount] = useState(0); // how many peers we're connected to
+  const [voicePeerIds, setVoicePeerIds] = useState([]); // everyone in call
+  const [remoteStreams, setRemoteStreams] = useState({});  // peerId -> video MediaStream
+  const [voiceStatus, setVoiceStatus] = useState('off');
+  const [peerCount, setPeerCount] = useState(0);
 
-  const inVoiceRef = useRef(false); // synchronous mirror of inVoice for listeners
-  const localStreamRef = useRef(null);    // audio stream
-  const localVideoStreamRef = useRef(null); // camera stream
+  const inVoiceRef = useRef(false);
+  const localAudioStreamRef = useRef(null);
+  const localVideoStreamRef = useRef(null);
   const peersRef = useRef(new Map()); // peerId -> { pc, audioEl }
 
-  // Recompute the aggregate voice status from all peer connection states.
   const refreshStatus = useCallback(() => {
     const peers = peersRef.current;
     setPeerCount(peers.size);
@@ -55,28 +44,27 @@ export function useVoiceChat() {
     setVoiceStatus(anyConnected ? 'connected' : 'connecting');
   }, []);
 
-  // Create (or fetch) the peer connection + audio element for a given peer id.
   const getOrCreatePeer = useCallback((peerId) => {
     const peers = peersRef.current;
     if (peers.has(peerId)) return peers.get(peerId);
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-    // Send our local audio tracks to this peer.
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((t) => pc.addTrack(t, localStreamRef.current));
+    if (localAudioStreamRef.current) {
+      localAudioStreamRef.current.getTracks().forEach((t) =>
+        pc.addTrack(t, localAudioStreamRef.current)
+      );
     }
-    // Send our local video tracks to this peer (if camera is already on).
     if (localVideoStreamRef.current) {
-      localVideoStreamRef.current.getTracks().forEach((t) => pc.addTrack(t, localVideoStreamRef.current));
+      localVideoStreamRef.current.getTracks().forEach((t) =>
+        pc.addTrack(t, localVideoStreamRef.current)
+      );
     }
 
-    // Relay ICE candidates to this specific peer.
     pc.onicecandidate = (e) => {
       if (e.candidate) socket.emit('voice-ice', { to: peerId, candidate: e.candidate });
     };
 
-    // Renegotiate when a track is added/removed mid-call (e.g. camera toggle).
     pc.onnegotiationneeded = async () => {
       try {
         const offer = await pc.createOffer();
@@ -85,7 +73,6 @@ export function useVoiceChat() {
       } catch { /* ignore */ }
     };
 
-    // Play this peer's remote audio through its own <audio> element.
     const audioEl = document.createElement('audio');
     audioEl.autoplay = true;
     audioEl.playsInline = true;
@@ -105,48 +92,38 @@ export function useVoiceChat() {
 
     const entry = { pc, audioEl };
     peers.set(peerId, entry);
+    setVoicePeerIds((prev) => (prev.includes(peerId) ? prev : [...prev, peerId]));
     return entry;
   }, [refreshStatus]);
 
-  // Tear down a single peer connection.
   const removePeer = useCallback((peerId) => {
-    const peers = peersRef.current;
-    const entry = peers.get(peerId);
+    const entry = peersRef.current.get(peerId);
     if (!entry) return;
     try { entry.pc.close(); } catch { /* ignore */ }
     if (entry.audioEl) { entry.audioEl.srcObject = null; entry.audioEl.remove(); }
-    peers.delete(peerId);
-    setRemoteStreams((prev) => { const next = { ...prev }; delete next[peerId]; return next; });
+    peersRef.current.delete(peerId);
+    setVoicePeerIds((prev) => prev.filter((id) => id !== peerId));
+    setRemoteStreams((prev) => { const n = { ...prev }; delete n[peerId]; return n; });
     refreshStatus();
   }, [refreshStatus]);
 
-  // Start voice: request mic, then announce we're in voice.
-  const startVoice = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream;
-      inVoiceRef.current = true;
-      setInVoice(true);
-      setMuted(false);
-      setVoiceStatus('connecting');
-      socket.emit('voice-join');
-    } catch {
-      setVoiceStatus('off');
-      alert('Could not access your microphone. Please allow mic permission and try again.');
-    }
+  const startVoice = useCallback(() => {
+    inVoiceRef.current = true;
+    setInVoice(true);
+    setVoiceStatus('connecting');
+    socket.emit('voice-join');
   }, []);
 
-  // Stop voice: tear down every peer connection and tell the room.
   const stopVoice = useCallback(() => {
     socket.emit('voice-leave');
-    peersRef.current.forEach((entry) => {
-      try { entry.pc.close(); } catch { /* ignore */ }
-      if (entry.audioEl) { entry.audioEl.srcObject = null; entry.audioEl.remove(); }
+    peersRef.current.forEach(({ pc, audioEl }) => {
+      try { pc.close(); } catch { /* ignore */ }
+      if (audioEl) { audioEl.srcObject = null; audioEl.remove(); }
     });
     peersRef.current.clear();
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = null;
+    if (localAudioStreamRef.current) {
+      localAudioStreamRef.current.getTracks().forEach((t) => t.stop());
+      localAudioStreamRef.current = null;
     }
     if (localVideoStreamRef.current) {
       localVideoStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -154,34 +131,49 @@ export function useVoiceChat() {
     }
     inVoiceRef.current = false;
     setInVoice(false);
-    setMuted(false);
+    setAudioEnabled(false);
     setVideoEnabled(false);
     setLocalVideoStream(null);
     setPeerCount(0);
     setVoiceStatus('off');
+    setVoicePeerIds([]);
     setRemoteStreams({});
   }, []);
 
-  const toggleMute = useCallback(() => {
-    const stream = localStreamRef.current;
-    if (!stream) return;
-    const next = !muted;
-    stream.getAudioTracks().forEach((t) => { t.enabled = !next; });
-    setMuted(next);
-  }, [muted]);
+  const toggleAudio = useCallback(async () => {
+    if (audioEnabled) {
+      if (localAudioStreamRef.current) {
+        const tracks = localAudioStreamRef.current.getAudioTracks();
+        peersRef.current.forEach(({ pc }) => {
+          pc.getSenders().forEach((s) => {
+            if (s.track && tracks.includes(s.track)) pc.removeTrack(s);
+          });
+        });
+        localAudioStreamRef.current.getTracks().forEach((t) => t.stop());
+        localAudioStreamRef.current = null;
+      }
+      setAudioEnabled(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        localAudioStreamRef.current = stream;
+        peersRef.current.forEach(({ pc }) => {
+          stream.getAudioTracks().forEach((t) => pc.addTrack(t, stream));
+        });
+        setAudioEnabled(true);
+      } catch {
+        alert('Could not access your microphone. Please allow mic permission and try again.');
+      }
+    }
+  }, [audioEnabled]);
 
-  // Toggle local camera on/off. Adds/removes the video track from every peer
-  // connection; WebRTC's onnegotiationneeded fires automatically to renegotiate.
   const toggleCamera = useCallback(async () => {
     if (videoEnabled) {
-      // Turn camera off.
       if (localVideoStreamRef.current) {
-        const videoTracks = localVideoStreamRef.current.getVideoTracks();
+        const tracks = localVideoStreamRef.current.getVideoTracks();
         peersRef.current.forEach(({ pc }) => {
-          pc.getSenders().forEach((sender) => {
-            if (sender.track && videoTracks.includes(sender.track)) {
-              pc.removeTrack(sender);
-            }
+          pc.getSenders().forEach((s) => {
+            if (s.track && tracks.includes(s.track)) pc.removeTrack(s);
           });
         });
         localVideoStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -190,7 +182,6 @@ export function useVoiceChat() {
       setVideoEnabled(false);
       setLocalVideoStream(null);
     } else {
-      // Turn camera on.
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         localVideoStreamRef.current = stream;
@@ -205,9 +196,12 @@ export function useVoiceChat() {
     }
   }, [videoEnabled]);
 
-  // Signaling listeners (mesh).
+  const setPeerMuted = useCallback((peerId, shouldMute) => {
+    const entry = peersRef.current.get(peerId);
+    if (entry?.audioEl) entry.audioEl.muted = shouldMute;
+  }, []);
+
   useEffect(() => {
-    // Server told us who's already in voice -> we offer to each of them.
     const onPeers = async ({ peers = [] }) => {
       for (const peerId of peers) {
         const { pc } = getOrCreatePeer(peerId);
@@ -220,7 +214,6 @@ export function useVoiceChat() {
       refreshStatus();
     };
 
-    // A peer sent us an offer -> answer it.
     const onOffer = async ({ from, sdp }) => {
       if (!from) return;
       const { pc } = getOrCreatePeer(from);
@@ -246,9 +239,7 @@ export function useVoiceChat() {
       }
     };
 
-    const onPeerLeft = ({ id } = {}) => {
-      if (id) removePeer(id);
-    };
+    const onPeerLeft = ({ id } = {}) => { if (id) removePeer(id); };
 
     socket.on('voice-peers', onPeers);
     socket.on('voice-offer', onOffer);
@@ -265,20 +256,21 @@ export function useVoiceChat() {
     };
   }, [getOrCreatePeer, removePeer, refreshStatus]);
 
-  // Clean up on unmount.
   useEffect(() => () => {
-    peersRef.current.forEach((entry) => {
-      try { entry.pc.close(); } catch { /* ignore */ }
-      if (entry.audioEl) entry.audioEl.remove();
+    peersRef.current.forEach(({ pc, audioEl }) => {
+      try { pc.close(); } catch { /* ignore */ }
+      if (audioEl) audioEl.remove();
     });
     peersRef.current.clear();
-    if (localStreamRef.current) localStreamRef.current.getTracks().forEach((t) => t.stop());
+    if (localAudioStreamRef.current) localAudioStreamRef.current.getTracks().forEach((t) => t.stop());
     if (localVideoStreamRef.current) localVideoStreamRef.current.getTracks().forEach((t) => t.stop());
   }, []);
 
   return {
-    inVoice, muted, voiceStatus, peerCount,
-    videoEnabled, localVideoStream, remoteStreams,
-    startVoice, stopVoice, toggleMute, toggleCamera,
+    inVoice, voiceStatus, peerCount,
+    audioEnabled, videoEnabled, localVideoStream,
+    voicePeerIds, remoteStreams,
+    startVoice, stopVoice,
+    toggleAudio, toggleCamera, setPeerMuted,
   };
 }

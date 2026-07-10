@@ -27,16 +27,39 @@ const YT_ENDED = 0;
 // Emojis available in the reaction picker.
 const EMOJIS = ['❤️', '😂', '🔥', '🎉', '👍', '😮', '😍', '🥳', '👏', '💯', '😢', '🙌', '🎶', '✨', '😎', '💃'];
 
-// Small component that attaches a MediaStream to a <video> element via a ref.
-function VideoTile({ stream, label, muted: isMuted = false, className = '' }) {
+// Video tile: shows a camera stream (or a blank placeholder when audio-only).
+// Remote tiles have mute-audio and hide-video buttons in the top-right corner.
+function VideoTile({ stream, label, isLocal = false, audioMuted = false, videoHidden = false, onToggleAudio, onToggleVideo }) {
   const ref = useRef(null);
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream || null;
   }, [stream]);
+  const showVideo = stream && !videoHidden;
   return (
-    <div className={`video-tile ${className}`}>
-      <video ref={ref} autoPlay playsInline muted={isMuted} />
-      {label && <span className="video-tile-label">{label}</span>}
+    <div className={`video-tile${isLocal ? ' video-tile-local' : ''}`}>
+      {showVideo
+        ? <video ref={ref} autoPlay playsInline muted={isLocal} />
+        : <div className="video-tile-blank"><span className="video-tile-icon">{audioMuted ? '🔇' : '🎤'}</span></div>
+      }
+      {!isLocal && (
+        <div className="video-tile-controls">
+          <button
+            className={`tile-ctrl-btn${audioMuted ? ' active' : ''}`}
+            onClick={onToggleAudio}
+            title={audioMuted ? 'Unmute audio' : 'Mute audio'}
+          >
+            {audioMuted ? '🔇' : '🔊'}
+          </button>
+          <button
+            className={`tile-ctrl-btn${videoHidden ? ' active' : ''}`}
+            onClick={onToggleVideo}
+            title={videoHidden ? 'Show video' : 'Hide video'}
+          >
+            {videoHidden ? '👁' : '✕'}
+          </button>
+        </div>
+      )}
+      <span className="video-tile-label">{label}</span>
     </div>
   );
 }
@@ -75,7 +98,19 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const pasteInputRef = useRef(null);
 
   // Live voice chat (WebRTC) hook.
-  const { inVoice, muted, voiceStatus, peerCount, videoEnabled, localVideoStream, remoteStreams, startVoice, stopVoice, toggleMute, toggleCamera } = useVoiceChat();
+  const { inVoice, voiceStatus, peerCount, audioEnabled, videoEnabled, localVideoStream, voicePeerIds, remoteStreams, startVoice, stopVoice, toggleAudio, toggleCamera, setPeerMuted } = useVoiceChat();
+
+  // Per-peer local prefs: { [peerId]: { audioMuted: bool, videoHidden: bool } }
+  const [peerPrefs, setPeerPrefs] = useState({});
+
+  function togglePeerAudio(peerId) {
+    const next = !(peerPrefs[peerId]?.audioMuted ?? false);
+    setPeerMuted(peerId, next);
+    setPeerPrefs((prev) => ({ ...prev, [peerId]: { ...prev[peerId], audioMuted: next } }));
+  }
+  function togglePeerVideo(peerId) {
+    setPeerPrefs((prev) => ({ ...prev, [peerId]: { ...prev[peerId], videoHidden: !(prev[peerId]?.videoHidden ?? false) } }));
+  }
 
   // Authoritative state mirror (server time based). Kept in a ref because the
   // drift-correction loop reads it frequently without needing re-renders.
@@ -604,6 +639,8 @@ export default function Room({ roomCode, initialState, onLeave }) {
     if (inVoice) stopVoice();
     else startVoice();
   }
+  function handleToggleAudio() { toggleAudio(); }
+  function handleToggleCamera() { toggleCamera(); }
 
   function handleCopy() {
     navigator.clipboard?.writeText(roomCode).then(() => {
@@ -703,14 +740,26 @@ export default function Room({ roomCode, initialState, onLeave }) {
         {/* Activity line (who did what). */}
         {activity && <div className="activity-toast">{activity}</div>}
 
-        {/* Video call grid — shown when anyone has their camera on. */}
-        {inVoice && (videoEnabled || Object.keys(remoteStreams).length > 0) && (
+        {/* Video call grid — shown when in voice (shows all participants). */}
+        {inVoice && (
           <div className="video-call-grid">
-            {videoEnabled && (
-              <VideoTile stream={localVideoStream} label="You" muted className="video-tile-local" />
-            )}
-            {Object.entries(remoteStreams).map(([peerId, stream]) => (
-              <VideoTile key={peerId} stream={stream} label="Guest" />
+            {/* Local tile — always visible when in call */}
+            <VideoTile
+              stream={localVideoStream}
+              label="You"
+              isLocal
+            />
+            {/* One tile per remote peer, blank if they have no camera */}
+            {voicePeerIds.map((peerId) => (
+              <VideoTile
+                key={peerId}
+                stream={remoteStreams[peerId] ?? null}
+                label="Guest"
+                audioMuted={peerPrefs[peerId]?.audioMuted ?? false}
+                videoHidden={peerPrefs[peerId]?.videoHidden ?? false}
+                onToggleAudio={() => togglePeerAudio(peerId)}
+                onToggleVideo={() => togglePeerVideo(peerId)}
+              />
             ))}
           </div>
         )}
@@ -766,33 +815,42 @@ export default function Room({ roomCode, initialState, onLeave }) {
           ⟳
         </button>
         <span className="reaction-spacer" />
-        <button
-          className={`btn tiny icon-btn voice-btn ${inVoice ? 'on' : ''}`}
-          onClick={handleVoiceToggle}
-          title={inVoice ? 'Live — click to leave voice' : 'Talk / sing live with everyone'}
-          aria-label={inVoice ? 'Leave voice' : 'Join voice'}
-        >
-          {inVoice ? '🎙️' : '🎤'}
-        </button>
-        {inVoice && (
+        {!inVoice ? (
           <button
-            className={`btn tiny icon-btn ${muted ? 'primary' : ''}`}
-            onClick={toggleMute}
-            title={muted ? 'Unmute your mic' : 'Mute your mic'}
-            aria-label={muted ? 'Unmute mic' : 'Mute mic'}
+            className="btn tiny icon-btn voice-btn"
+            onClick={handleVoiceToggle}
+            title="Join call — then turn on mic and/or camera"
+            aria-label="Join call"
           >
-            {muted ? '🔇' : '🔊'}
+            📞
           </button>
-        )}
-        {inVoice && (
-          <button
-            className={`btn tiny icon-btn ${videoEnabled ? 'on' : ''}`}
-            onClick={toggleCamera}
-            title={videoEnabled ? 'Turn off camera' : 'Turn on camera'}
-            aria-label={videoEnabled ? 'Camera off' : 'Camera on'}
-          >
-            {videoEnabled ? '📹' : '📷'}
-          </button>
+        ) : (
+          <>
+            <button
+              className={`btn tiny icon-btn${audioEnabled ? ' on' : ''}`}
+              onClick={handleToggleAudio}
+              title={audioEnabled ? 'Turn off mic' : 'Turn on mic'}
+              aria-label={audioEnabled ? 'Mic off' : 'Mic on'}
+            >
+              {audioEnabled ? '🎙️' : '🎤'}
+            </button>
+            <button
+              className={`btn tiny icon-btn${videoEnabled ? ' on' : ''}`}
+              onClick={handleToggleCamera}
+              title={videoEnabled ? 'Turn off camera' : 'Turn on camera'}
+              aria-label={videoEnabled ? 'Camera off' : 'Camera on'}
+            >
+              {videoEnabled ? '📹' : '📷'}
+            </button>
+            <button
+              className="btn tiny icon-btn voice-btn on"
+              onClick={handleVoiceToggle}
+              title="Leave call"
+              aria-label="Leave call"
+            >
+              📴
+            </button>
+          </>
         )}
         <button className={`btn tiny icon-btn chat-toggle${chatBlink ? ' blink-chat' : ''}${unread > 0 ? ' has-unread' : ''}`} onClick={toggleChat} title="Chat" aria-label="Chat">
           💬{unread > 0 && <sup className="btn-badge">{unread}</sup>}
@@ -826,8 +884,8 @@ export default function Room({ roomCode, initialState, onLeave }) {
       {inVoice && (
         <div className={`voice-status ${voiceStatus}`}>
           {voiceStatus === 'connected'
-            ? `🎙️ Voice connected — talking with ${peerCount} ${peerCount === 1 ? 'person' : 'people'}`
-            : '🎙️ Voice on — waiting for others to join voice…'}
+            ? `In call with ${peerCount} ${peerCount === 1 ? 'person' : 'people'} — mic ${audioEnabled ? 'on' : 'off'}, camera ${videoEnabled ? 'on' : 'off'}`
+            : 'In call — waiting for others to join…'}
         </div>
       )}
 
