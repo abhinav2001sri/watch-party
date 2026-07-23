@@ -73,6 +73,7 @@ function computeExpectedTime(room) {
 // Build the payload describing the full room state for clients.
 function roomStatePayload(room) {
   return {
+    mode: room.mode || 'youtube',
     videoId: room.videoId,
     isPlaying: room.isPlaying,
     currentTime: computeExpectedTime(room),
@@ -294,10 +295,12 @@ io.on('connection', (socket) => {
   // ---------------------------------------------------------------------------
   // createRoom -> creates a fresh room and joins the creator to it.
   // ---------------------------------------------------------------------------
-  socket.on('createRoom', ({ videoId, name } = {}, ack) => {
+  socket.on('createRoom', ({ videoId, name, mode } = {}, ack) => {
     socket.data.name = cleanName(name);
+    const roomMode = mode === 'jamalong' ? 'jamalong' : 'youtube';
     const roomCode = generateRoomCode();
     rooms[roomCode] = {
+      mode: roomMode,
       videoId: videoId || null,
       isPlaying: false,
       currentTime: 0,

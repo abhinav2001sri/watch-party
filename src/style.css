@@ -197,6 +197,40 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   margin-top: 36px;
 }
 
+.mode-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mode-header {
+  text-align: center;
+  color: #2b1e52;
+}
+
+.mode-header h2 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+
+.mode-header p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.mode-cards {
+  grid-template-columns: 1fr 1fr;
+}
+
+.mode-card h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.mode-back {
+  align-self: center;
+}
+
 /* ---------- Global banner ---------- */
 .global-banner {
   position: fixed;
@@ -888,6 +922,185 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
 .chat-input-row input { flex: 1 1 auto; }
 .chat-input-row .btn { flex: 0 0 auto; }
 
+/* ---------- Jamalong (Meet-like) ---------- */
+.jam-room {
+  width: 100%;
+  max-width: 1220px;
+}
+
+.jam-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: rgba(43, 30, 82, 0.78);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.jam-room-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.jam-chip {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.jam-room-code {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.jam-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jam-status-text {
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.jam-stage-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+}
+
+.jam-stage {
+  position: relative;
+  min-height: 66vh;
+  background: #000;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.jam-stage-video,
+.jam-stage .jam-video-blank {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.jam-stage-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  color: #d8c8ff;
+}
+
+.jam-stage-empty h3 {
+  margin: 0;
+  font-size: 32px;
+}
+
+.jam-stage-empty p {
+  margin: 8px 0 0;
+}
+
+.jam-stage-caption {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  max-width: calc(100% - 24px);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.jam-side-panel {
+  background: rgba(43, 30, 82, 0.78);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 66vh;
+}
+
+.jam-side-panel h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.jam-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.jam-tile {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: #101018;
+}
+
+.jam-tile-video,
+.jam-tile .jam-video-blank {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.jam-video-blank {
+  display: grid;
+  place-items: center;
+  color: #d8c8ff;
+  font-size: 13px;
+}
+
+.jam-tile-label {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.jam-controls {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.jam-help-line {
+  margin-top: 8px;
+  text-align: center;
+  color: #2a1b4a;
+  font-weight: 700;
+  font-size: 13px;
+}
+
 @media (max-width: 640px) {
   .chat-panel {
     left: 8px;
@@ -899,4 +1112,32 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   }
   .chat-messages { max-height: 38vh; }
   .voice-btn, .chat-toggle { min-height: 36px; }
+}
+
+@media (max-width: 920px) {
+  .jam-stage-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .jam-stage {
+    min-height: 48vh;
+  }
+
+  .jam-side-panel {
+    min-height: 0;
+  }
+
+  .jam-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .mode-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .jam-grid {
+    grid-template-columns: 1fr;
+  }
 }

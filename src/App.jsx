@@ -6,17 +6,18 @@
 import React, { useEffect, useState } from 'react';
 import Home from './Home.jsx';
 import Room from './Room.jsx';
+import JamalongRoom from './JamalongRoom.jsx';
 import { socket, startClockSync } from './socket.js';
 
 export default function App() {
-  const [room, setRoom] = useState(null); // { code, state }
+  const [room, setRoom] = useState(null); // { code, state, mode }
   const [banner, setBanner] = useState('');
 
   useEffect(() => {
     // Begin estimating the client<->server clock offset as soon as we mount.
     startClockSync();
 
-    const onRoomFull = () => setBanner('Room is full — up to six people can watch together.');
+    const onRoomFull = () => setBanner('Room is full — up to six people can join this room.');
     const onError = (msg) => setBanner(typeof msg === 'string' ? msg : 'Something went wrong.');
 
     socket.on('roomFull', onRoomFull);
@@ -35,7 +36,7 @@ export default function App() {
 
     const tryJoin = () => {
       socket.emit('joinRoom', { roomCode: code }, (res) => {
-        if (res && res.ok) enterRoom(res.roomCode, res.state);
+        if (res && res.ok) enterRoom(res.roomCode, res.state, res.state?.mode);
         else setBanner((res && res.error) || 'Could not join that room.');
       });
     };
@@ -52,9 +53,10 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [banner]);
 
-  function enterRoom(code, state) {
+  function enterRoom(code, state, mode) {
     setBanner('');
-    setRoom({ code, state });
+    const finalMode = mode || state?.mode || 'youtube';
+    setRoom({ code, state, mode: finalMode });
     // Reflect the room in the URL so it's shareable and the back button works.
     const url = `${window.location.pathname}?room=${code}`;
     window.history.replaceState({}, '', url);
@@ -70,7 +72,11 @@ export default function App() {
       <BackgroundFloaters />
       {banner && <div className="global-banner">{banner}</div>}
       {room ? (
-        <Room roomCode={room.code} initialState={room.state} onLeave={leaveRoom} />
+        room.mode === 'jamalong' ? (
+          <JamalongRoom roomCode={room.code} initialState={room.state} onLeave={leaveRoom} />
+        ) : (
+          <Room roomCode={room.code} initialState={room.state} onLeave={leaveRoom} />
+        )
       ) : (
         <Home onEnterRoom={enterRoom} />
       )}
