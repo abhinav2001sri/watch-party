@@ -122,7 +122,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
 .home { width: 100%; max-width: 900px; }
 .hero { text-align: center; margin: 24px 0 32px; }
 .hero h1 {
-  font-size: clamp(64px, 13vw, 160px);
+  font-size: clamp(50px, 10.5vw, 126px);
   font-weight: 900;
   line-height: 1.02;
   margin: 0 0 12px;
@@ -229,6 +229,21 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
 
 .mode-back {
   align-self: center;
+}
+
+.join-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  background: rgba(43, 30, 82, 0.72);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+
+.join-row input {
+  flex: 1;
 }
 
 /* ---------- Global banner ---------- */
@@ -735,6 +750,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   .search-row { flex-direction: column; }
   .search-thumb { width: 72px; height: 40px; }
   .search-actions { flex-direction: column; }
+  .join-row { flex-direction: column; }
 }
 
 /* ---------- Mobile / touch tuning ---------- */
