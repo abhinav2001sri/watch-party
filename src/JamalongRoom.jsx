@@ -2,14 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { socket } from './socket.js';
 import { useJamalongCall } from './useJamalongCall.js';
 
-function StreamView({ stream, muted = false, className = '' }) {
+function StreamView({ stream, muted = false, className = '', emptyLabel = 'Camera off' }) {
   const ref = useRef(null);
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream || null;
   }, [stream]);
 
   if (!stream) {
-    return <div className={`jam-video-blank ${className}`}>No video</div>;
+    return <div className={`jam-video-blank ${className}`}>{emptyLabel}</div>;
   }
 
   return <video ref={ref} autoPlay playsInline muted={muted} className={className} />;
@@ -31,11 +31,10 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
-  const [systemLine, setSystemLine] = useState('Jamalong ready. Join call to start speaking.');
+  const [systemLine, setSystemLine] = useState('Jamalong ready. You are now in the call.');
   const chatEndRef = useRef(null);
 
   const {
-    inCall,
     micEnabled,
     cameraEnabled,
     screenSharing,
@@ -84,10 +83,11 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
   }, [chatOpen, messages]);
 
   useEffect(() => {
+    startCall();
     return () => {
       leaveCall();
     };
-  }, [leaveCall]);
+  }, [leaveCall, startCall]);
 
   function handleShareRoom() {
     const joinUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
@@ -148,11 +148,11 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
 
       <section className="jam-stage-wrap">
         <div className="jam-stage">
-          <StreamView stream={stageStream} muted className="jam-stage-video" />
+          <StreamView stream={stageStream} muted className="jam-stage-video" emptyLabel="" />
           {!stageStream && (
             <div className="jam-stage-empty">
               <h3>Ready to jam</h3>
-              <p>Turn on camera or share a tab/window to start presenting.</p>
+              <p>Turn on your camera or present a tab/window to start.</p>
             </div>
           )}
           <div className="jam-stage-caption">{systemLine}</div>
@@ -168,21 +168,15 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
       </section>
 
       <div className="jam-controls">
-        {!inCall ? (
-          <button className="btn primary" onClick={startCall}>Join call</button>
-        ) : (
-          <button className="btn" onClick={leaveCall}>Leave call</button>
-        )}
-
-        <button className={`btn ${micEnabled ? 'primary' : ''}`} onClick={toggleMic} disabled={!inCall}>
+        <button className={`btn ${micEnabled ? 'primary' : ''}`} onClick={toggleMic}>
           {micEnabled ? 'Mic on' : 'Mic off'}
         </button>
 
-        <button className={`btn ${cameraEnabled ? 'primary' : ''}`} onClick={toggleCamera} disabled={!inCall}>
+        <button className={`btn ${cameraEnabled ? 'primary' : ''}`} onClick={toggleCamera}>
           {cameraEnabled ? 'Camera on' : 'Camera off'}
         </button>
 
-        <button className={`btn ${screenSharing ? 'primary' : ''}`} onClick={toggleScreenShare} disabled={!inCall}>
+        <button className={`btn ${screenSharing ? 'primary' : ''}`} onClick={toggleScreenShare}>
           {screenSharing ? 'Stop presenting' : 'Present tab/window'}
         </button>
 
