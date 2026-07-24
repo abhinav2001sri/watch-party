@@ -12,6 +12,7 @@ import { socket, startClockSync } from './socket.js';
 export default function App() {
   const [room, setRoom] = useState(null); // { code, state, mode }
   const [banner, setBanner] = useState('');
+  const isJamalong = room?.mode === 'jamalong';
 
   useEffect(() => {
     // Begin estimating the client<->server clock offset as soon as we mount.
@@ -68,7 +69,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app${isJamalong ? ' app-jamalong' : ''}`}>
       <BackgroundFloaters />
       {banner && <div className="global-banner">{banner}</div>}
       {room ? (

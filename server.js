@@ -430,6 +430,18 @@ io.on('connection', (socket) => {
     if (!room) return;
     if (room.voiceUsers) room.voiceUsers.delete(socket.id);
     socket.to(room.__code).emit('voice-peer-left', { id: socket.id });
+    socket.to(room.__code).emit('screen-share-state', { from: socket.id, active: false, trackId: null });
+  });
+
+  // Broadcast whether a participant is currently sharing a screen track.
+  socket.on('screen-share-state', ({ active, trackId } = {}) => {
+    const room = getSocketRoom(socket);
+    if (!room) return;
+    socket.to(room.__code).emit('screen-share-state', {
+      from: socket.id,
+      active: !!active,
+      trackId: active ? (trackId || null) : null,
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -648,6 +660,7 @@ io.on('connection', (socket) => {
       io.to(roomCode).emit('userCount', room.users.size);
       io.to(roomCode).emit('peerLeft');
       io.to(roomCode).emit('voice-peer-left', { id: socket.id });
+      io.to(roomCode).emit('screen-share-state', { from: socket.id, active: false, trackId: null });
     }
   }
 

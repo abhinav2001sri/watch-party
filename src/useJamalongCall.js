@@ -14,10 +14,13 @@ export function useJamalongCall() {
   const [screenAudioShared, setScreenAudioShared] = useState(false);
   const [callStatus, setCallStatus] = useState('off');
   const [peerIds, setPeerIds] = useState([]);
-  const [remoteStreams, setRemoteStreams] = useState({});
+  const [remoteCameraStreams, setRemoteCameraStreams] = useState({});
+  const [remoteScreenStreams, setRemoteScreenStreams] = useState({});
+  const [activeScreenSharers, setActiveScreenSharers] = useState({});
 
   const inCallRef = useRef(false);
   const peersRef = useRef(new Map());
+  const remoteTrackStoreRef = useRef(new Map()); // peerId -> { cameraTrackId, screenTrackId }
 
   const micTrackRef = useRef(null);
   const cameraTrackRef = useRef(null);
@@ -49,11 +52,6 @@ export function useJamalongCall() {
     setCallStatus(connected ? 'connected' : 'connecting');
   }, []);
 
-  const getActiveVideoTrack = useCallback(() => {
-    if (screenTrackRef.current) return screenTrackRef.current;
-    return cameraTrackRef.current;
-  }, []);
-
   const updateMicSenders = useCallback((track) => {
     peersRef.current.forEach((entry) => {
       if (entry.micSender && !track) {
@@ -67,15 +65,28 @@ export function useJamalongCall() {
     });
   }, []);
 
-  const updateVideoSenders = useCallback((track) => {
+  const updateCameraSenders = useCallback((track) => {
     peersRef.current.forEach((entry) => {
-      if (entry.videoSender && !track) {
-        try { entry.pc.removeTrack(entry.videoSender); } catch { /* ignore */ }
-        entry.videoSender = null;
-      } else if (!entry.videoSender && track) {
-        entry.videoSender = entry.pc.addTrack(track, new MediaStream([track]));
-      } else if (entry.videoSender && track) {
-        entry.videoSender.replaceTrack(track).catch(() => {});
+      if (entry.cameraSender && !track) {
+        try { entry.pc.removeTrack(entry.cameraSender); } catch { /* ignore */ }
+        entry.cameraSender = null;
+      } else if (!entry.cameraSender && track) {
+        entry.cameraSender = entry.pc.addTrack(track, new MediaStream([track]));
+      } else if (entry.cameraSender && track) {
+        entry.cameraSender.replaceTrack(track).catch(() => {});
+      }
+    });
+  }, []);
+
+  const updateScreenVideoSenders = useCallback((track) => {
+    peersRef.current.forEach((entry) => {
+      if (entry.screenVideoSender && !track) {
+        try { entry.pc.removeTrack(entry.screenVideoSender); } catch { /* ignore */ }
+        entry.screenVideoSender = null;
+      } else if (!entry.screenVideoSender && track) {
+        entry.screenVideoSender = entry.pc.addTrack(track, new MediaStream([track]));
+      } else if (entry.screenVideoSender && track) {
+        entry.screenVideoSender.replaceTrack(track).catch(() => {});
       }
     });
   }, []);
@@ -102,8 +113,19 @@ export function useJamalongCall() {
       entry.audioEl.remove();
     }
     peersRef.current.delete(peerId);
+    remoteTrackStoreRef.current.delete(peerId);
     setPeerIds((prev) => prev.filter((id) => id !== peerId));
-    setRemoteStreams((prev) => {
+    setRemoteCameraStreams((prev) => {
+      const next = { ...prev };
+      delete next[peerId];
+      return next;
+    });
+    setRemoteScreenStreams((prev) => {
+      const next = { ...prev };
+      delete next[peerId];
+      return next;
+    });
+    setActiveScreenSharers((prev) => {
       const next = { ...prev };
       delete next[peerId];
       return next;
@@ -129,7 +151,8 @@ export function useJamalongCall() {
       audioEl,
       inboundStream,
       micSender: null,
-      videoSender: null,
+      cameraSender: null,
+      screenVideoSender: null,
       screenAudioSender: null,
     };
 
@@ -148,20 +171,38 @@ export function useJamalongCall() {
     };
 
     pc.ontrack = (e) => {
-      const [stream] = e.streams;
-      if (stream) {
-        stream.getTracks().forEach((track) => {
-          if (!inboundStream.getTracks().some((t) => t.id === track.id)) {
-            inboundStream.addTrack(track);
-          }
-        });
-      } else {
-        const track = e.track;
-        if (!inboundStream.getTracks().some((t) => t.id === track.id)) {
+      const track = e.track;
+      if (track.kind === 'audio') {
+        const [stream] = e.streams;
+        if (stream) {
+          stream.getTracks().forEach((t) => {
+            if (!inboundStream.getTracks().some((x) => x.id === t.id)) {
+              inboundStream.addTrack(t);
+            }
+          });
+        } else if (!inboundStream.getTracks().some((x) => x.id === track.id)) {
           inboundStream.addTrack(track);
         }
+        return;
       }
-      setRemoteStreams((prev) => ({ ...prev, [peerId]: inboundStream }));
+
+      if (track.kind === 'video') {
+        const info = remoteTrackStoreRef.current.get(peerId) || {};
+        const isKnownScreen = info.screenTrackId && track.id === info.screenTrackId;
+        const hasCamera = Boolean(info.cameraTrackId);
+        const assumeSecondVideoIsScreen = !isKnownScreen && hasCamera && info.cameraTrackId !== track.id;
+        const isScreenTrack = Boolean(isKnownScreen || assumeSecondVideoIsScreen);
+
+        remoteTrackStoreRef.current.set(peerId, {
+          ...info,
+          cameraTrackId: isScreenTrack ? info.cameraTrackId : track.id,
+          screenTrackId: isScreenTrack ? (info.screenTrackId || track.id) : info.screenTrackId,
+        });
+
+        const targetSetter = isScreenTrack ? setRemoteScreenStreams : setRemoteCameraStreams;
+        const stream = new MediaStream([track]);
+        targetSetter((prev) => ({ ...prev, [peerId]: stream }));
+      }
     };
 
     pc.onconnectionstatechange = () => {
@@ -178,9 +219,13 @@ export function useJamalongCall() {
     if (micTrackRef.current) {
       entry.micSender = pc.addTrack(micTrackRef.current, new MediaStream([micTrackRef.current]));
     }
-    const videoTrack = getActiveVideoTrack();
-    if (videoTrack) {
-      entry.videoSender = pc.addTrack(videoTrack, new MediaStream([videoTrack]));
+    const cameraTrack = cameraTrackRef.current;
+    if (cameraTrack) {
+      entry.cameraSender = pc.addTrack(cameraTrack, new MediaStream([cameraTrack]));
+    }
+    const screenTrack = screenTrackRef.current;
+    if (screenTrack) {
+      entry.screenVideoSender = pc.addTrack(screenTrack, new MediaStream([screenTrack]));
     }
     if (screenAudioTrackRef.current) {
       entry.screenAudioSender = pc.addTrack(screenAudioTrackRef.current, new MediaStream([screenAudioTrackRef.current]));
@@ -188,7 +233,7 @@ export function useJamalongCall() {
 
     refreshStatus();
     return entry;
-  }, [getActiveVideoTrack, refreshStatus, removePeer]);
+  }, [refreshStatus, removePeer]);
 
   const stopScreenShare = useCallback(() => {
     if (screenTrackRef.current) {
@@ -210,10 +255,12 @@ export function useJamalongCall() {
     setScreenAudioShared(false);
 
     updateScreenAudioSenders(null);
-    updateVideoSenders(cameraTrackRef.current);
-  }, [updateScreenAudioSenders, updateVideoSenders]);
+    updateScreenVideoSenders(null);
+    socket.emit('screen-share-state', { active: false, trackId: null });
+  }, [updateScreenAudioSenders, updateScreenVideoSenders]);
 
   const startCall = useCallback(() => {
+    if (inCallRef.current) return;
     inCallRef.current = true;
     setInCall(true);
     setCallStatus('connecting');
@@ -251,7 +298,9 @@ export function useJamalongCall() {
     setScreenSharing(false);
     setScreenAudioShared(false);
     setPeerIds([]);
-    setRemoteStreams({});
+    setRemoteCameraStreams({});
+    setRemoteScreenStreams({});
+    setActiveScreenSharers({});
     setCallStatus('off');
   }, [stopScreenShare]);
 
@@ -280,9 +329,7 @@ export function useJamalongCall() {
     if (cameraTrackRef.current) {
       const old = cameraTrackRef.current;
       cameraTrackRef.current = null;
-      if (!screenTrackRef.current) {
-        updateVideoSenders(null);
-      }
+      updateCameraSenders(null);
       try { old.stop(); } catch { /* ignore */ }
       setCameraEnabled(false);
       return;
@@ -294,14 +341,12 @@ export function useJamalongCall() {
       if (!track) return;
       track.contentHint = 'motion';
       cameraTrackRef.current = track;
-      if (!screenTrackRef.current) {
-        updateVideoSenders(track);
-      }
+      updateCameraSenders(track);
       setCameraEnabled(true);
     } catch {
       alert('Camera permission is required to turn on your camera.');
     }
-  }, [updateVideoSenders]);
+  }, [updateCameraSenders]);
 
   const startScreenShare = useCallback(async (withAudio = true) => {
     if (screenTrackRef.current) return;
@@ -331,15 +376,16 @@ export function useJamalongCall() {
 
       videoTrack.onended = () => stopScreenShare();
 
-      updateVideoSenders(videoTrack);
+      updateScreenVideoSenders(videoTrack);
       updateScreenAudioSenders(audioTrack || null);
+      socket.emit('screen-share-state', { active: true, trackId: videoTrack.id });
 
       setScreenSharing(true);
       setScreenAudioShared(Boolean(audioTrack));
     } catch {
       // User canceled picker or browser denied screen share.
     }
-  }, [stopScreenShare, updateScreenAudioSenders, updateVideoSenders]);
+  }, [stopScreenShare, updateScreenAudioSenders, updateScreenVideoSenders]);
 
   const toggleScreenShare = useCallback(async () => {
     if (screenTrackRef.current) {
@@ -401,11 +447,30 @@ export function useJamalongCall() {
       if (id) removePeer(id);
     };
 
+    const onScreenShareState = ({ from, active, trackId } = {}) => {
+      if (!from) return;
+      const prior = remoteTrackStoreRef.current.get(from) || {};
+      remoteTrackStoreRef.current.set(from, {
+        ...prior,
+        screenTrackId: active ? (trackId || prior.screenTrackId || null) : null,
+      });
+      setActiveScreenSharers((prev) => ({ ...prev, [from]: !!active }));
+
+      if (!active) {
+        setRemoteScreenStreams((prev) => {
+          const next = { ...prev };
+          delete next[from];
+          return next;
+        });
+      }
+    };
+
     socket.on('voice-peers', onPeers);
     socket.on('voice-offer', onOffer);
     socket.on('voice-answer', onAnswer);
     socket.on('voice-ice', onIce);
     socket.on('voice-peer-left', onPeerLeft);
+    socket.on('screen-share-state', onScreenShareState);
 
     return () => {
       socket.off('voice-peers', onPeers);
@@ -413,6 +478,7 @@ export function useJamalongCall() {
       socket.off('voice-answer', onAnswer);
       socket.off('voice-ice', onIce);
       socket.off('voice-peer-left', onPeerLeft);
+      socket.off('screen-share-state', onScreenShareState);
     };
   }, [getOrCreatePeer, refreshStatus, removePeer]);
 
@@ -428,7 +494,9 @@ export function useJamalongCall() {
     screenAudioShared,
     callStatus,
     peerIds,
-    remoteStreams,
+    remoteCameraStreams,
+    remoteScreenStreams,
+    activeScreenSharers,
     localCameraStream,
     localScreenStream,
     startCall,

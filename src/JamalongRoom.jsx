@@ -32,7 +32,9 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [systemLine, setSystemLine] = useState('Jamalong ready. You are now in the call.');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const chatEndRef = useRef(null);
+  const roomRootRef = useRef(null);
 
   const {
     micEnabled,
@@ -41,7 +43,9 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
     screenAudioShared,
     callStatus,
     peerIds,
-    remoteStreams,
+    remoteCameraStreams,
+    remoteScreenStreams,
+    activeScreenSharers,
     localCameraStream,
     localScreenStream,
     startCall,
@@ -53,14 +57,16 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
 
   const stageStream = useMemo(() => {
     if (screenSharing && localScreenStream) return localScreenStream;
+    const remoteSharerId = peerIds.find((id) => activeScreenSharers[id] && remoteScreenStreams[id]);
+    if (remoteSharerId) return remoteScreenStreams[remoteSharerId];
     const firstRemote = peerIds.find((id) => {
-      const s = remoteStreams[id];
+      const s = remoteCameraStreams[id];
       return s && s.getVideoTracks().length > 0;
     });
-    if (firstRemote) return remoteStreams[firstRemote];
+    if (firstRemote) return remoteCameraStreams[firstRemote];
     if (localCameraStream) return localCameraStream;
     return null;
-  }, [localCameraStream, localScreenStream, peerIds, remoteStreams, screenSharing]);
+  }, [activeScreenSharers, localCameraStream, localScreenStream, peerIds, remoteCameraStreams, remoteScreenStreams, screenSharing]);
 
   useEffect(() => {
     socket.on('userCount', setUserCount);
@@ -81,6 +87,14 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
   useEffect(() => {
     if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatOpen, messages]);
+
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   useEffect(() => {
     startCall();
@@ -127,12 +141,22 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
     setChatInput('');
   }
 
+  async function toggleFullscreen() {
+    const el = roomRootRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      await el.requestFullscreen?.();
+      return;
+    }
+    await document.exitFullscreen?.();
+  }
+
   const remoteTiles = peerIds.map((peerId, index) => (
-    <ParticipantTile key={peerId} label={`Guest ${index + 1}`} stream={remoteStreams[peerId] || null} />
+    <ParticipantTile key={peerId} label={`Guest ${index + 1}`} stream={remoteCameraStreams[peerId] || null} />
   ));
 
   return (
-    <div className="jam-room">
+    <div className={`jam-room${isFullscreen ? ' jam-room-fs' : ''}`} ref={roomRootRef}>
       <header className="jam-header">
         <div className="jam-room-meta">
           <span className="jam-chip">Jamalong</span>
@@ -161,8 +185,8 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
         <aside className="jam-side-panel">
           <h3>Participants</h3>
           <div className="jam-grid">
-            <ParticipantTile label="You" stream={localCameraStream} mine />
             {remoteTiles}
+            <ParticipantTile label="You" stream={localCameraStream} mine />
           </div>
         </aside>
       </section>
@@ -178,6 +202,10 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
 
         <button className={`btn ${screenSharing ? 'primary' : ''}`} onClick={toggleScreenShare}>
           {screenSharing ? 'Stop presenting' : 'Present tab/window'}
+        </button>
+
+        <button className="btn" onClick={toggleFullscreen}>
+          {isFullscreen ? 'Exit full size' : 'Full size'}
         </button>
 
         <button className="btn" onClick={() => setChatOpen((v) => !v)}>Chat</button>
