@@ -1132,6 +1132,10 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   background: rgba(0, 0, 0, 0.65);
 }
 
+.jam-mobile-participants {
+  display: none;
+}
+
 .jam-controls {
   margin-top: 12px;
   display: flex;
@@ -1211,5 +1215,46 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
 
   .jam-room {
     padding: 6px;
+  }
+
+  .jam-stage {
+    min-height: 56vh;
+  }
+
+  .jam-side-panel {
+    display: none;
+  }
+
+  .jam-mobile-participants {
+    position: absolute;
+    right: 10px;
+    bottom: 42px;
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: min(34vw, 132px);
+    max-height: 58%;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+
+  .jam-mobile-participants .jam-tile {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 8px;
+    border-color: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  }
+
+  .jam-mobile-participants .jam-tile-label {
+    font-size: 10px;
+    left: 5px;
+    bottom: 5px;
+    padding: 2px 6px;
+  }
+
+  .jam-mobile-participants .jam-video-blank {
+    font-size: 10px;
   }
 }

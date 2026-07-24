@@ -155,6 +155,17 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
     <ParticipantTile key={peerId} label={`Guest ${index + 1}`} stream={remoteCameraStreams[peerId] || null} />
   ));
 
+  const mobileTiles = [
+    ...peerIds.map((peerId, index) => (
+      <ParticipantTile
+        key={`m-${peerId}`}
+        label={`Guest ${index + 1}`}
+        stream={remoteCameraStreams[peerId] || null}
+      />
+    )),
+    <ParticipantTile key="m-self" label="You" stream={localCameraStream} mine />,
+  ];
+
   return (
     <div className={`jam-room${isFullscreen ? ' jam-room-fs' : ''}`} ref={roomRootRef}>
       <header className="jam-header">
@@ -179,6 +190,11 @@ export default function JamalongRoom({ roomCode, initialState, onLeave }) {
               <p>Turn on your camera or present a tab/window to start.</p>
             </div>
           )}
+
+          <div className="jam-mobile-participants" aria-label="Participants">
+            {mobileTiles}
+          </div>
+
           <div className="jam-stage-caption">{systemLine}</div>
         </div>
 
