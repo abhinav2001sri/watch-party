@@ -89,6 +89,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [soundOpen, setSoundOpen] = useState(false);
   const [volume, setVolume] = useState(100);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const chatEndRef = useRef(null);
   const chatInputRef = useRef(null);
   const emojiWrapRef = useRef(null);
@@ -96,6 +97,7 @@ export default function Room({ roomCode, initialState, onLeave }) {
   const searchSeqRef = useRef(0);
   const searchInputRef = useRef(null);
   const pasteInputRef = useRef(null);
+  const roomRootRef = useRef(null);
 
   // Live voice chat (WebRTC) hook.
   const { inVoice, voiceStatus, peerCount, audioEnabled, videoEnabled, localVideoStream, voicePeerIds, remoteStreams, startVoice, stopVoice, toggleAudio, toggleCamera, setPeerMuted } = useVoiceChat();
@@ -384,6 +386,15 @@ export default function Room({ roomCode, initialState, onLeave }) {
     if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, chatOpen]);
 
+  // Track fullscreen state so the toggle label stays accurate.
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
   // Close the emoji / sound popovers when clicking anywhere outside them.
   useEffect(() => {
     if (!emojiOpen && !soundOpen) return;
@@ -670,13 +681,23 @@ export default function Room({ roomCode, initialState, onLeave }) {
     }
   }
 
+  async function handleToggleFullscreen() {
+    const el = roomRootRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      await el.requestFullscreen?.();
+      return;
+    }
+    await document.exitFullscreen?.();
+  }
+
   function handleLeaveClick() {
     socket.emit('leaveRoom');
     onLeave();
   }
 
   return (
-    <div className="room">
+    <div className={`room${isFullscreen ? ' room-fs' : ''}`} ref={roomRootRef}>
       <header className="room-header">
         <div className="room-code">
           <span className="label">Room</span>
@@ -815,6 +836,9 @@ export default function Room({ roomCode, initialState, onLeave }) {
         </div>
         <button className="btn icon-btn" onClick={handleSyncNow} disabled={!videoId} title="Re-sync with everyone" aria-label="Sync now">
           ⟳
+        </button>
+        <button className="btn tiny" onClick={handleToggleFullscreen} title="Toggle full size view">
+          {isFullscreen ? 'Exit full size' : 'Full size'}
         </button>
         <span className="reaction-spacer" />
         {!inVoice ? (

@@ -278,6 +278,26 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
 
 /* ---------- Room ---------- */
 .room { width: 100%; max-width: 960px; }
+.room.room-fs { max-width: none; }
+
+.room.room-fs .player-wrap {
+  aspect-ratio: auto;
+  height: 70vh;
+}
+
+.room:fullscreen {
+  width: 100vw;
+  max-width: none;
+  min-height: 100vh;
+  padding: 8px;
+  background: #130d27;
+  overflow: auto;
+}
+
+.room:fullscreen .player-wrap {
+  aspect-ratio: auto;
+  height: 70vh;
+}
 .room-header {
   display: flex;
   align-items: center;
@@ -756,6 +776,10 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 4px 0 6px;
   .search-thumb { width: 72px; height: 40px; }
   .search-actions { flex-direction: column; }
   .join-row { flex-direction: column; }
+  .room.room-fs .player-wrap,
+  .room:fullscreen .player-wrap {
+    height: 56vh;
+  }
 }
 
 /* ---------- Mobile / touch tuning ---------- */
